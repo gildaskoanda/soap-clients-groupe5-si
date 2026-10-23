@@ -1,0 +1,9 @@
+<!-- Résultat attendu : Fault Client / CLIENT_NOT_FOUND -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:getClientDetailsRequest>
+      <c:codeClient>CLI-999999</c:codeClient>
+    </c:getClientDetailsRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

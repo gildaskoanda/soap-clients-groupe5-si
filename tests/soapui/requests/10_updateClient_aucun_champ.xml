@@ -1,0 +1,9 @@
+<!-- Résultat attendu : Fault Client / VALIDATION_ERROR -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:updateClientRequest>
+      <c:codeClient>CLI-000010</c:codeClient>
+    </c:updateClientRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

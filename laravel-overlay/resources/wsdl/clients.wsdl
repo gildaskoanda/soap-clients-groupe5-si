@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Contrat WSDL 1.1 - Service SOAP de clients (document/literal, SOAP 1.1)
+  Le marqueur __ENDPOINT__ est remplacé à l'exécution par l'URL publique du service.
+-->
+<definitions name="ClientService"
+    targetNamespace="urn:ibam:clients:v1"
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:tns="urn:ibam:clients:v1"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <types>
+    <xsd:schema targetNamespace="urn:ibam:clients:v1" elementFormDefault="qualified">
+
+      <xsd:simpleType name="Statut">
+        <xsd:restriction base="xsd:string">
+          <xsd:enumeration value="actif"/>
+          <xsd:enumeration value="inactif"/>
+          <xsd:enumeration value="suspendu"/>
+        </xsd:restriction>
+      </xsd:simpleType>
+
+      <xsd:complexType name="Client">
+        <xsd:sequence>
+          <xsd:element name="codeClient" type="xsd:string"/>
+          <xsd:element name="nom" type="xsd:string"/>
+          <xsd:element name="prenom" type="xsd:string"/>
+          <xsd:element name="email" type="xsd:string"/>
+          <xsd:element name="telephone" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="ville" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="pays" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="statut" type="tns:Statut"/>
+          <xsd:element name="dateInscription" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="version" type="xsd:int"/>
+          <xsd:element name="synchronisation" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence>
+      </xsd:complexType>
+
+      <xsd:element name="getClientDetailsRequest">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="codeClient" type="xsd:string"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="getClientDetailsResponse">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="client" type="tns:Client"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="searchClientsRequest">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="nom" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="ville" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="statut" type="tns:Statut" minOccurs="0"/>
+          <xsd:element name="page" type="xsd:int" minOccurs="0"/>
+          <xsd:element name="taillePage" type="xsd:int" minOccurs="0"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="searchClientsResponse">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="total" type="xsd:int"/>
+          <xsd:element name="page" type="xsd:int"/>
+          <xsd:element name="taillePage" type="xsd:int"/>
+          <xsd:element name="clients" type="tns:Client" minOccurs="0" maxOccurs="unbounded"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="updateClientRequest">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="codeClient" type="xsd:string"/>
+          <xsd:element name="versionAttendue" type="xsd:int" minOccurs="0"/>
+          <xsd:element name="nom" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="prenom" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="email" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="telephone" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="ville" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="statut" type="tns:Statut" minOccurs="0"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="updateClientResponse">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="message" type="xsd:string"/>
+          <xsd:element name="client" type="tns:Client"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="ClientFault">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="code" type="xsd:string"/>
+          <xsd:element name="message" type="xsd:string"/>
+          <xsd:element name="champ" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+
+  <message name="getClientDetailsIn"><part name="parameters" element="tns:getClientDetailsRequest"/></message>
+  <message name="getClientDetailsOut"><part name="parameters" element="tns:getClientDetailsResponse"/></message>
+  <message name="searchClientsIn"><part name="parameters" element="tns:searchClientsRequest"/></message>
+  <message name="searchClientsOut"><part name="parameters" element="tns:searchClientsResponse"/></message>
+  <message name="updateClientIn"><part name="parameters" element="tns:updateClientRequest"/></message>
+  <message name="updateClientOut"><part name="parameters" element="tns:updateClientResponse"/></message>
+  <message name="ClientFaultMsg"><part name="fault" element="tns:ClientFault"/></message>
+
+  <portType name="ClientPortType">
+    <operation name="getClientDetails">
+      <input message="tns:getClientDetailsIn"/>
+      <output message="tns:getClientDetailsOut"/>
+      <fault name="ClientFault" message="tns:ClientFaultMsg"/>
+    </operation>
+    <operation name="searchClients">
+      <input message="tns:searchClientsIn"/>
+      <output message="tns:searchClientsOut"/>
+      <fault name="ClientFault" message="tns:ClientFaultMsg"/>
+    </operation>
+    <operation name="updateClient">
+      <input message="tns:updateClientIn"/>
+      <output message="tns:updateClientOut"/>
+      <fault name="ClientFault" message="tns:ClientFaultMsg"/>
+    </operation>
+  </portType>
+
+  <binding name="ClientBinding" type="tns:ClientPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="getClientDetails">
+      <soap:operation soapAction="urn:ibam:clients:v1#getClientDetails"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="ClientFault"><soap:fault name="ClientFault" use="literal"/></fault>
+    </operation>
+    <operation name="searchClients">
+      <soap:operation soapAction="urn:ibam:clients:v1#searchClients"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="ClientFault"><soap:fault name="ClientFault" use="literal"/></fault>
+    </operation>
+    <operation name="updateClient">
+      <soap:operation soapAction="urn:ibam:clients:v1#updateClient"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="ClientFault"><soap:fault name="ClientFault" use="literal"/></fault>
+    </operation>
+  </binding>
+
+  <service name="ClientService">
+    <documentation>Service SOAP de gestion des clients - MongoDB est la base de référence.</documentation>
+    <port name="ClientPort" binding="tns:ClientBinding">
+      <soap:address location="__ENDPOINT__"/>
+    </port>
+  </service>
+</definitions>

@@ -1,0 +1,9 @@
+<!-- Résultat attendu : 200 - client CLI-000010 -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:getClientDetailsRequest>
+      <c:codeClient>CLI-000010</c:codeClient>
+    </c:getClientDetailsRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

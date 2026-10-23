@@ -1,0 +1,304 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 4da60fa3bffe4b57a4d8cf5ddb244059
+      name: 'Templates/SOAP Clients'
+  templates:
+    - uuid: 850cd0ae2e83444aa0003d1807be362d
+      template: 'SOAP Clients Service'
+      name: 'SOAP Clients Service'
+      description: 'Supervision du service SOAP de clients (Laravel + MongoDB + ETL Airflow) via les endpoints /health et /monitoring/stats.'
+      groups:
+        - name: 'Templates/SOAP Clients'
+      macros:
+        - macro: '{$SOAP_BASE_URL}'
+          value: 'http://laravel'
+          description: 'URL du service Laravel, atteignable depuis le serveur Zabbix'
+        - macro: '{$SOAP_LATENCY_WARN_MS}'
+          value: '500'
+          description: 'Latence moyenne SOAP (5 min) au-dela de laquelle alerter'
+        - macro: '{$ETL_MAX_AGE_SEC}'
+          value: '7200'
+          description: 'Age maximal de la derniere execution ETL Airflow'
+        - macro: '{$PENDING_RECONCILIATION_WARN}'
+          value: '50'
+          description: 'Nombre de clients en attente de reconciliation vers MySQL'
+      items:
+        - uuid: 23ccae5158bf476c86577685ae7f936e
+          name: 'Santé du service (brut)'
+          type: HTTP_AGENT
+          key: soap.health.raw
+          delay: 30s
+          history: 1d
+          trends: '0'
+          value_type: TEXT
+          url: '{$SOAP_BASE_URL}/health'
+          status_codes: '200,503'
+          timeout: 5s
+          tags:
+            - tag: component
+              value: soap
+          triggers:
+            - uuid: fa47f795c2534de186c2aaabd4cc1cc6
+              expression: 'nodata(/SOAP Clients Service/soap.health.raw,2m)=1'
+              name: 'Service SOAP injoignable (aucune réponse depuis 2 min)'
+              priority: HIGH
+              description: 'Le serveur Zabbix ne reçoit plus de réponse HTTP du service Laravel.'
+        - uuid: 6e8cd9ec22b64f9880e76a6d5d440469
+          name: 'MongoDB joignable depuis le service SOAP'
+          type: DEPENDENT
+          key: soap.mongodb.up
+          delay: '0'
+          history: 14d
+          trends: 90d
+          description: '1 = MongoDB répond, 0 = indisponible (Fault SERVICE_UNAVAILABLE côté SOAP)'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.mongodb
+            - type: JAVASCRIPT
+              parameters:
+                - "return value === 'up' ? 1 : 0;"
+          master_item:
+            key: soap.health.raw
+          tags:
+            - tag: component
+              value: mongodb
+          triggers:
+            - uuid: 4e30b2cd1e6c4b4c98760727c8aae57a
+              expression: 'last(/SOAP Clients Service/soap.mongodb.up)=0'
+              name: 'MongoDB indisponible pour le service SOAP'
+              priority: HIGH
+              description: 'Les opérations SOAP échouent avec le Fault SERVICE_UNAVAILABLE.'
+        - uuid: b5d2350dae024661bee22015255a651a
+          name: 'Indicateurs SOAP (brut, JSON)'
+          type: HTTP_AGENT
+          key: soap.stats.raw
+          delay: 1m
+          history: 1d
+          trends: '0'
+          value_type: TEXT
+          url: '{$SOAP_BASE_URL}/monitoring/stats'
+          status_codes: '200,503'
+          timeout: 10s
+          tags:
+            - tag: component
+              value: soap
+        - uuid: e1b0db9c8f81419cb0ada284cec56099
+          name: 'Appels SOAP (5 min)'
+          type: DEPENDENT
+          key: soap.calls.5m
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: ''
+          description: 'Nombre d''appels SOAP sur 5 minutes glissantes'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.calls
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+        - uuid: 247d0538e21d491ba1f849cd5855032d
+          name: 'Fautes SOAP (5 min)'
+          type: DEPENDENT
+          key: soap.faults.5m
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: ''
+          description: 'Fautes (métier + serveur) sur 5 minutes'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.faults
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+        - uuid: 90f4d29de2424d25af5beab0067d6485
+          name: 'Fautes serveur SOAP (5 min)'
+          type: DEPENDENT
+          key: soap.faults.server.5m
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: ''
+          description: 'SERVICE_UNAVAILABLE + INTERNAL_ERROR sur 5 minutes'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.server_faults
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+          triggers:
+            - uuid: 083163d1ee154bb0af27cf77db5268dd
+              expression: 'last(/SOAP Clients Service/soap.faults.server.5m)>=3'
+              name: 'Fautes serveur SOAP répétées (>= 3 sur 5 min)'
+              priority: AVERAGE
+              description: 'Erreurs techniques (et non métier) du service.'
+        - uuid: 3404b705fe2b4fb1baa69122041f262b
+          name: 'Latence moyenne SOAP'
+          type: DEPENDENT
+          key: soap.latency.avg
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: 'ms'
+          description: 'Durée moyenne de traitement sur 5 minutes'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.avg_ms
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+          triggers:
+            - uuid: a97b01423c8c413382b5cb7a3ef91f76
+              expression: 'avg(/SOAP Clients Service/soap.latency.avg,5m)>{$SOAP_LATENCY_WARN_MS}'
+              name: 'Latence SOAP élevée (> {$SOAP_LATENCY_WARN_MS} ms)'
+              priority: WARNING
+              description: 'Temps de réponse moyen au-dessus du seuil.'
+        - uuid: 287667dcb70e475eac2f43fb729cf8cf
+          name: 'Latence maximale SOAP'
+          type: DEPENDENT
+          key: soap.latency.max
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: 'ms'
+          description: 'Durée maximale de traitement sur 5 minutes'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.max_ms
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+        - uuid: 622c64cc19664382b3041b1f3893943c
+          name: 'Clients en base de référence'
+          type: DEPENDENT
+          key: soap.clients.total
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: ''
+          description: 'Nombre de clients dans MongoDB'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.clients_total
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+        - uuid: 380ee92e8b7a4addbaefeeb3bacf1acb
+          name: 'Clients en attente de réconciliation'
+          type: DEPENDENT
+          key: soap.reconciliation.pending
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: ''
+          description: 'Clients modifiés via SOAP, pas encore renvoyés vers MySQL'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.pending_reconciliation
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+          triggers:
+            - uuid: 0cbf638bf5ff44449badf137e3f8788c
+              expression: 'last(/SOAP Clients Service/soap.reconciliation.pending)>{$PENDING_RECONCILIATION_WARN}'
+              name: 'Retard de réconciliation vers MySQL (> {$PENDING_RECONCILIATION_WARN})'
+              priority: WARNING
+              description: 'Le DAG clients_reconcile_mongo_to_mysql ne traite pas la file.'
+        - uuid: 8ac1f3e78db9454bbfd91c60e4b6fdbf
+          name: 'Âge de la dernière exécution ETL'
+          type: DEPENDENT
+          key: soap.etl.age
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: 's'
+          description: 'Secondes depuis la fin du dernier DAG clients_mysql_to_mongo (-1 = jamais exécuté)'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.etl_last_age_seconds
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '-1'
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+          triggers:
+            - uuid: b6dc419754664d01b3c43591cab06fd6
+              expression: 'last(/SOAP Clients Service/soap.etl.age)>{$ETL_MAX_AGE_SEC} or last(/SOAP Clients Service/soap.etl.age)=-1'
+              name: 'ETL Airflow non exécuté depuis trop longtemps'
+              priority: WARNING
+              description: 'Le DAG clients_mysql_to_mongo ne tourne plus ou n''a jamais tourné.'
+        - uuid: cf50ce4622dc4498a4612da10bb4b883
+          name: 'Lignes rejetées (dernier ETL)'
+          type: DEPENDENT
+          key: soap.etl.rejected
+          delay: '0'
+          history: 14d
+          trends: 90d
+          units: ''
+          description: 'Lignes refusées par le contrôle qualité au dernier passage'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.etl_last_rejected
+          master_item:
+            key: soap.stats.raw
+          tags:
+            - tag: component
+              value: soap
+      graphs:
+        - uuid: fc405d2c588341c0bd58fa987a5d9b34
+          name: 'Appels et fautes SOAP (5 min)'
+          graph_items:
+            - color: 1A7C11
+              item:
+                host: 'SOAP Clients Service'
+                key: soap.calls.5m
+            - sortorder: '1'
+              color: F63100
+              item:
+                host: 'SOAP Clients Service'
+                key: soap.faults.5m
+            - sortorder: '2'
+              color: 2774A4
+              item:
+                host: 'SOAP Clients Service'
+                key: soap.faults.server.5m
+        - uuid: b88bd45145464f11bbf853d879950740
+          name: 'Latence SOAP (ms)'
+          graph_items:
+            - color: 1A7C11
+              item:
+                host: 'SOAP Clients Service'
+                key: soap.latency.avg
+            - sortorder: '1'
+              color: F63100
+              item:
+                host: 'SOAP Clients Service'
+                key: soap.latency.max

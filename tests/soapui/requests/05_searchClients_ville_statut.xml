@@ -1,0 +1,12 @@
+<!-- Résultat attendu : 200 - clients de Bobo-Dioulasso au statut actif -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:searchClientsRequest>
+      <c:ville>Bobo</c:ville>
+      <c:statut>actif</c:statut>
+      <c:page>1</c:page>
+      <c:taillePage>10</c:taillePage>
+    </c:searchClientsRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

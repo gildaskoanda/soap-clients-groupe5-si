@@ -1,0 +1,11 @@
+<!-- Résultat attendu : 200 - total >= 1, tous nom=KONE -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:searchClientsRequest>
+      <c:nom>KONE</c:nom>
+      <c:page>1</c:page>
+      <c:taillePage>5</c:taillePage>
+    </c:searchClientsRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

@@ -1,0 +1,11 @@
+<!-- Résultat attendu : Fault Client / VERSION_CONFLICT (si la version courante est > 1) -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:updateClientRequest>
+      <c:codeClient>CLI-000010</c:codeClient>
+      <c:versionAttendue>1</c:versionAttendue>
+      <c:ville>Kaya</c:ville>
+    </c:updateClientRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

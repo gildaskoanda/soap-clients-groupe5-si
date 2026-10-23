@@ -1,0 +1,6 @@
+.git
+presentation
+docs
+tests
+airflow/tests
+**/__pycache__

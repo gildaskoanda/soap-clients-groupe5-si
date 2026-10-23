@@ -1,0 +1,9 @@
+<!-- Résultat attendu : Fault Client / VALIDATION_ERROR champ=taillePage -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:searchClientsRequest>
+      <c:taillePage>1000</c:taillePage>
+    </c:searchClientsRequest>
+  </soapenv:Body>
+</soapenv:Envelope>
