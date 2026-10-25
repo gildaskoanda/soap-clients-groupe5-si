@@ -167,7 +167,7 @@ services:
     hostname: soap-clients-agent
     environment:
       ZBX_SERVER_HOST: zabbix-server
-      ZBX_HOSTNAME: soap-clients-agent
+      ZBX_HOSTNAME: soap-clients-app
     depends_on: [zabbix-server]
 
 volumes:

@@ -272,33 +272,33 @@ zabbix_export:
           tags:
             - tag: component
               value: soap
-      graphs:
-        - uuid: fc405d2c588341c0bd58fa987a5d9b34
-          name: 'Appels et fautes SOAP (5 min)'
-          graph_items:
-            - color: 1A7C11
-              item:
-                host: 'SOAP Clients Service'
-                key: soap.calls.5m
-            - sortorder: '1'
-              color: F63100
-              item:
-                host: 'SOAP Clients Service'
-                key: soap.faults.5m
-            - sortorder: '2'
-              color: 2774A4
-              item:
-                host: 'SOAP Clients Service'
-                key: soap.faults.server.5m
-        - uuid: b88bd45145464f11bbf853d879950740
-          name: 'Latence SOAP (ms)'
-          graph_items:
-            - color: 1A7C11
-              item:
-                host: 'SOAP Clients Service'
-                key: soap.latency.avg
-            - sortorder: '1'
-              color: F63100
-              item:
-                host: 'SOAP Clients Service'
-                key: soap.latency.max
+  graphs:
+    - uuid: fc405d2c588341c0bd58fa987a5d9b34
+      name: 'Appels et fautes SOAP (5 min)'
+      graph_items:
+        - color: 1A7C11
+          item:
+            host: 'SOAP Clients Service'
+            key: soap.calls.5m
+        - sortorder: '1'
+          color: F63100
+          item:
+            host: 'SOAP Clients Service'
+            key: soap.faults.5m
+        - sortorder: '2'
+          color: 2774A4
+          item:
+            host: 'SOAP Clients Service'
+            key: soap.faults.server.5m
+    - uuid: b88bd45145464f11bbf853d879950740
+      name: 'Latence SOAP (ms)'
+      graph_items:
+        - color: 1A7C11
+          item:
+            host: 'SOAP Clients Service'
+            key: soap.latency.avg
+        - sortorder: '1'
+          color: F63100
+          item:
+            host: 'SOAP Clients Service'
+            key: soap.latency.max

@@ -48,14 +48,16 @@ def rpc(method, params, token=None):
 
 def wait_for_api(timeout=180):
     start = time.time()
+    last_error = None
     while time.time() - start < timeout:
         try:
-            v = rpc("apiinfo.version", {})
+            v = rpc("apiinfo.version", [])
             print(f"API Zabbix prête (version {v})")
             return
-        except (urllib.error.URLError, ConnectionError, RuntimeError, json.JSONDecodeError):
+        except (urllib.error.URLError, ConnectionError, RuntimeError, json.JSONDecodeError) as exc:
+            last_error = exc
             time.sleep(5)
-    sys.exit("API Zabbix injoignable : vérifier `docker compose ps` (zabbix-web, zabbix-server).")
+    sys.exit(f"API Zabbix injoignable après {timeout}s. Dernière erreur : {last_error}")
 
 
 def main():
