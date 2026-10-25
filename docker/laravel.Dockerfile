@@ -6,7 +6,7 @@ FROM php:8.3-apache
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git unzip libxml2-dev libssl-dev libzip-dev pkg-config \
  && docker-php-ext-install soap zip \
- && pecl install mongodb \
+ && pecl install mongodb-1.21.10 \
  && docker-php-ext-enable mongodb \
  && a2enmod rewrite \
  && rm -rf /var/lib/apt/lists/*
@@ -18,8 +18,8 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 
 WORKDIR /var/www/html
 ENV COMPOSER_ALLOW_SUPERUSER=1
-RUN composer create-project laravel/laravel:^11.0 . --prefer-dist --no-interaction \
- && composer require mongodb/mongodb:^1.19 --no-interaction --no-progress
+RUN composer create-project laravel/laravel:^12.0 . --prefer-dist --no-interaction \
+  && composer require mongodb/mongodb:^1.21 --no-interaction --no-progress
 
 # Code du projet : écrase/complète le squelette Laravel
 COPY laravel-overlay/ /var/www/html/
