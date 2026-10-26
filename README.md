@@ -25,7 +25,7 @@ flowchart LR
   subgraph Reference
     MO[(MongoDB 7<br/>clients_db - BASE DE REFERENCE)]
   end
-  SOAP[Laravel 11<br/>Service SOAP /soap/clients]
+  SOAP[Laravel 12<br/>Service SOAP /soap/clients]
   CL[Client SOAP<br/>SoapUI / applications]
   ZB[Zabbix 7.0<br/>server + web + agent2]
 
@@ -101,7 +101,8 @@ curl -s -X POST http://localhost:8080/soap/clients -H 'Content-Type: text/xml' \
 
 | Niveau | Commande | Couvre |
 |---|---|---|
-| **Bout en bout (Docker)** | `python3 tests/e2e/run_soap_tests.py --db-down docker` | WSDL, 3 opérations, 5 codes de Fault, panne puis reprise de MongoDB |
+| **Chaîne complète (Docker)** | `bash tests/e2e/run_pipeline_e2e.sh` | MySQL → DAG 1 → MongoDB → SOAP → DAG 2 → MySQL, idempotence, protection des modifications |
+| **SOAP (Docker)** | `python3 tests/e2e/run_soap_tests.py --db-down docker` | WSDL, 3 opérations, codes de Fault, panne puis reprise de MongoDB |
 | ETL + réconciliation | `pip install -r airflow/requirements-dev.txt && pytest airflow/tests -v` | 21 tests (qualité, idempotence, conflits, réconciliation) |
 | SOAP sans Docker | `php -S 127.0.0.1:8099 tests/harness/server.php` puis `python3 tests/e2e/run_soap_tests.py --url http://127.0.0.1:8099 --db-down harness` | couche SOAP seule (dépôt en mémoire) |
 | SoapUI | importer le WSDL, coller les requêtes de `tests/soapui/requests/` | voir [`docs/TESTS.md`](docs/TESTS.md) |
@@ -119,7 +120,7 @@ Détails : [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md).
 
 ```
 docker-compose.yml        Pile complète (11 services)
-docker/laravel.Dockerfile PHP 8.3 + ext-soap + ext-mongodb + Laravel 11
+docker/laravel.Dockerfile PHP 8.3 + ext-soap + ext-mongodb + Laravel 12
 db/mysql, db/mongo        Schéma, jeu de données (générateur déterministe), init MongoDB (index, JSON Schema)
 airflow/dags              2 DAG + package clients_etl (rules, etl, reconcile) ; airflow/tests = pytest
 laravel-overlay/          Code du service (superposé à Laravel à la construction) : WSDL, SOAP, dépôt Mongo
@@ -136,12 +137,17 @@ presentation/             Présentation PowerPoint
 | Couche SOAP (WSDL, 3 opérations, Faults, validation) | **Exécutée** : 20/20 tests e2e sur serveur PHP 8.3 + client `SoapClient` PHP — rapport `docs/RESULTATS_TESTS_HARNESS.md` |
 | ETL, qualité, idempotence, réconciliation | **Exécutés** : 21 tests pytest (MongoDB simulé par `mongomock`) |
 | DAG Airflow | **Importés** dans Airflow 2.9.3 réel, sans erreur ; graphe de tâches vérifié |
-| `MongoClientRepository`, image Laravel, `docker-compose.yml`, template Zabbix | Écrits selon la documentation officielle, **à valider au premier `docker compose up`** (aucun démon Docker dans l'environnement de rédaction). Voir le tableau de dépannage ci-dessous. |
+| `MongoClientRepository`, image Laravel, `docker-compose.yml` | **Validés sur pile Docker réelle** (octobre 2026) : 18/18 tests SOAP (`docs/RESULTATS_TESTS_DOCKER.md`), panne et reprise de MongoDB, scénario MySQL → Airflow → MongoDB → SOAP → Airflow → MySQL |
+| Template Zabbix | **Importé dans Zabbix 7.0.32** via `zabbix/setup_zabbix.py` ; métriques reçues, alerte « MongoDB indisponible » testée |
 
 ### Dépannage probable au premier lancement
 | Symptôme | Cause / action |
 |---|---|
-| `laravel` ne devient pas healthy | `docker compose logs laravel` ; vérifier la compilation de `pecl install mongodb` |
+| Docker : « failed to connect to the docker API » / erreur 500 sur `_ping` | Docker Desktop n'est pas (encore) démarré : attendre « Engine running » ; sinon `wsl --update` puis `wsl --shutdown` et relancer Docker Desktop |
+| Build `laravel` : Composer refuse `laravel/framework` (« security advisories ») | Version de Laravel hors support. Le Dockerfile utilise Laravel 12 ; ne pas désactiver `policy.advisories.block` |
+| Build `laravel` : `mongodb/mongodb` incompatible avec `ext-mongodb` | Garder l'extension et la bibliothèque sur la même branche (1.21.x ↔ ^1.21) |
+| `laravel` ne devient pas healthy | `docker compose logs laravel` ; vérifier la compilation de `pecl install mongodb-1.21.10` |
 | WSDL OK mais Fault `SERVICE_UNAVAILABLE` | Mongo non prêt ou mot de passe `.env` différent de celui d'init (supprimer les volumes : `docker compose down -v`) |
 | DAG absent dans Airflow | `docker compose exec airflow-scheduler airflow dags list-import-errors` |
-| Import du template Zabbix refusé | Version Zabbix ≠ 7.0 : adapter `version:` du YAML ou importer via l'interface |
+| Import du template Zabbix refusé | Le message exact est affiché par `zabbix/setup_zabbix.py` (version Zabbix ≠ 7.0 : adapter `version:` ; format : `graphs` doit être au niveau de `zabbix_export`) |
+| Journal Zabbix : `host [...] not found` | `ZBX_HOSTNAME` de l'agent doit être identique au nom de l'hôte (`soap-clients-app`) |

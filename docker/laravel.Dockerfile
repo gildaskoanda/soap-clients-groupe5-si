@@ -1,4 +1,6 @@
-# Service SOAP : Laravel 11 + ext-soap + ext-mongodb.
+# Service SOAP : Laravel 12 + ext-soap + ext-mongodb.
+# Versions épinglées ensemble : ext-mongodb 1.21.x <-> mongodb/mongodb ^1.21 (la lib 1.x est incompatible avec l'ext 2.x installée par défaut par pecl).
+# Laravel 11 est refusé par Composer (avis de sécurité, fin de support mars 2026).
 # Laravel est installé proprement à la construction de l'image ; seul le code du projet
 # (laravel-overlay/) est versionné dans le dépôt.
 FROM php:8.3-apache
@@ -19,7 +21,7 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 WORKDIR /var/www/html
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer create-project laravel/laravel:^12.0 . --prefer-dist --no-interaction \
-  && composer require mongodb/mongodb:^1.21 --no-interaction --no-progress
+ && composer require mongodb/mongodb:^1.21 --no-interaction --no-progress
 
 # Code du projet : écrase/complète le squelette Laravel
 COPY laravel-overlay/ /var/www/html/

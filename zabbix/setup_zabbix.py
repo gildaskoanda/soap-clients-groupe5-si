@@ -57,7 +57,7 @@ def wait_for_api(timeout=180):
         except (urllib.error.URLError, ConnectionError, RuntimeError, json.JSONDecodeError) as exc:
             last_error = exc
             time.sleep(5)
-    sys.exit(f"API Zabbix injoignable après {timeout}s. Dernière erreur : {last_error}")
+    sys.exit(f"API Zabbix injoignable après {timeout}s (vérifier `docker compose ps`). Dernière erreur : {last_error}")
 
 
 def main():

@@ -9,7 +9,7 @@
 | C | Manuel SOAP | SoapUI | `tests/soapui/requests/*.xml` | 11 requêtes |
 | D | **Bout en bout de la chaîne principale** | shell + SoapUI | §3 ci-dessous | 1 scénario |
 
-Résultats déjà obtenus (sans Docker) : `RESULTATS_TESTS_HARNESS.md` (A, 20/20) et `RESULTATS_PYTEST.txt` (B, 21/21).
+Résultats obtenus : sans Docker `RESULTATS_TESTS_HARNESS.md` (A, 20/20) et `RESULTATS_PYTEST.txt` (B, 21/21) ; **sur la pile Docker réelle** `RESULTATS_TESTS_DOCKER.md` (A, 18/18 ; les cas T19/T20 de panne sont vérifiés à la main : `docker compose stop mongo` → Fault `SERVICE_UNAVAILABLE`, puis `start`). Le scénario D est automatisé par `tests/e2e/run_pipeline_e2e.sh`.
 
 ## 2. Cas du test A (extraits — liste complète dans `RESULTATS_TESTS_HARNESS.md`)
 
