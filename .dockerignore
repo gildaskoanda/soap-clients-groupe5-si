@@ -4,3 +4,5 @@ docs
 tests
 airflow/tests
 **/__pycache__
+laravel-app/vendor
+laravel-app/.env

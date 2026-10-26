@@ -5,7 +5,7 @@
  * Expose /soap/clients (WSDL + SOAP) avec un dépôt en mémoire.
  * Contrôle de panne : POST /_test/down et /_test/up (simule MongoDB indisponible).
  */
-$root = dirname(__DIR__, 2) . '/laravel-overlay/app';
+$root = dirname(__DIR__, 2) . '/laravel-app/app';
 foreach (['Repositories/RepositoryUnavailableException', 'Repositories/ClientRepositoryInterface', 'Soap/ClientFault',
           'Soap/ClientValidator', 'Soap/ClientSoapService', 'Soap/SoapEndpoint'] as $f) {
     require_once "$root/$f.php";
@@ -20,7 +20,7 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $endpointUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/soap/clients';
 $endpoint = new App\Soap\SoapEndpoint(
     new App\Soap\ClientSoapService($repo),
-    dirname(__DIR__, 2) . '/laravel-overlay/resources/wsdl/clients.wsdl',
+    dirname(__DIR__, 2) . '/laravel-app/resources/wsdl/clients.wsdl',
     sys_get_temp_dir() . '/soap_harness_wsdl'
 );
 

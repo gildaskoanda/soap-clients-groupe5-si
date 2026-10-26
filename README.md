@@ -123,7 +123,7 @@ docker-compose.yml        Pile complète (11 services)
 docker/laravel.Dockerfile PHP 8.3 + ext-soap + ext-mongodb + Laravel 12
 db/mysql, db/mongo        Schéma, jeu de données (générateur déterministe), init MongoDB (index, JSON Schema)
 airflow/dags              2 DAG + package clients_etl (rules, etl, reconcile) ; airflow/tests = pytest
-laravel-overlay/          Code du service (superposé à Laravel à la construction) : WSDL, SOAP, dépôt Mongo
+laravel-app/          Code du service (projet Laravel 12 complet, composer.lock inclus) : WSDL, SOAP, dépôt Mongo
 zabbix/                   Template YAML + script de configuration par API
 tests/                    e2e Python, requêtes SoapUI, serveur de test PHP
 docs/                     Documentation SOAP, réconciliation, supervision, tests, résultats

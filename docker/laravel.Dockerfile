@@ -1,8 +1,8 @@
 # Service SOAP : Laravel 12 + ext-soap + ext-mongodb.
-# Versions épinglées ensemble : ext-mongodb 1.21.x <-> mongodb/mongodb ^1.21 (la lib 1.x est incompatible avec l'ext 2.x installée par défaut par pecl).
-# Laravel 11 est refusé par Composer (avis de sécurité, fin de support mars 2026).
-# Laravel est installé proprement à la construction de l'image ; seul le code du projet
-# (laravel-overlay/) est versionné dans le dépôt.
+# Le projet Laravel COMPLET est versionné dans laravel-app/ (composer.json + composer.lock) :
+# `composer install` installe exactement les versions du lockfile, sans résolution de versions.
+# Versions épinglées ensemble : ext-mongodb 1.21.x <-> mongodb/mongodb ^1.21
+# (la bibliothèque 1.x est incompatible avec l'extension 2.x installée par défaut par pecl).
 FROM php:8.3-apache
 
 RUN apt-get update \
@@ -20,14 +20,17 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 
 WORKDIR /var/www/html
 ENV COMPOSER_ALLOW_SUPERUSER=1
-RUN composer create-project laravel/laravel:^12.0 . --prefer-dist --no-interaction \
- && composer require mongodb/mongodb:^1.21 --no-interaction --no-progress
 
-# Code du projet : écrase/complète le squelette Laravel
-COPY laravel-overlay/ /var/www/html/
+# 1) Dépendances figées par composer.lock (couche mise en cache tant que le lockfile ne change pas)
+COPY laravel-app/composer.json laravel-app/composer.lock ./
+RUN composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-autoloader --no-audit
 
-RUN mkdir -p storage/app/wsdl \
- && chown -R www-data:www-data storage bootstrap/cache \
- && composer dump-autoload --optimize --no-interaction
+# 2) Code du projet, puis autoload et découverte des paquets
+COPY laravel-app/ ./
+RUN cp -n .env.example .env \
+ && mkdir -p storage/app/wsdl \
+ && composer dump-autoload --optimize --no-interaction \
+ && php artisan key:generate --force \
+ && chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 80
