@@ -23,7 +23,7 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # 1) Dépendances figées par composer.lock (couche mise en cache tant que le lockfile ne change pas)
 COPY laravel-app/composer.json laravel-app/composer.lock ./
-RUN composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-autoloader --no-audit
+RUN composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-autoloader --no-security-blocking
 
 # 2) Code du projet, puis autoload et découverte des paquets
 COPY laravel-app/ ./
