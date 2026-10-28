@@ -51,7 +51,7 @@ soap()  { # soap Operation 'corps XML'
 # run_dag <dag_id> <suffixe> <nb_taches_attendues> -> écrit success | failed | timeout
 run_dag() {
   local dag="$1" rid="e2e_${TAG}_$2" expected="$3" out n_ok n_ko
-  AF dags trigger "$dag" -r "$rid" > /dev/null
+  if ! AF dags trigger "$dag" -r "$rid" > /dev/null; then echo "trigger_impossible"; return; fi
   for _ in $(seq 1 60); do
     sleep 3
     out=$(AF tasks states-for-dag-run "$dag" "$rid")
@@ -73,6 +73,23 @@ echo
 health=$(curl -s "$BASE/health")
 contains "E0 service SOAP et MongoDB disponibles (/health)" '"mongodb":"up"' "$health"
 if [ "$FAIL" -gt 0 ]; then echo "Pile non démarrée : arrêt."; exit 1; fi
+
+# Airflow doit être démarré et avoir enregistré les deux DAG (compter 2 à 3 minutes après `docker compose up -d`).
+if ! docker compose ps --status running --services 2>/dev/null | grep -qx "airflow-scheduler"; then
+  ko "E0 airflow-scheduler démarré" "service arrêté : lancer 'docker compose up -d' puis attendre 2 à 3 minutes"
+  echo "Pile incomplète : arrêt."; exit 1
+fi
+ok "E0 airflow-scheduler démarré"
+dags_ready=0
+for _ in $(seq 1 60); do
+  listing=$(AF dags list)
+  if echo "$listing" | grep -q "$DAG1" && echo "$listing" | grep -q "$DAG2"; then dags_ready=1; break; fi
+  sleep 5
+done
+if [ "$dags_ready" -eq 1 ]; then ok "E0 DAG enregistrés dans Airflow"; else
+  ko "E0 DAG enregistrés dans Airflow" "absents après 5 min : voir 'airflow dags list-import-errors'"
+  echo "Airflow n'est pas prêt : arrêt."; exit 1
+fi
 AF dags pause "$DAG2" > /dev/null
 
 # ---- 1. DAG 1 : MySQL -> MongoDB ---------------------------------------------
