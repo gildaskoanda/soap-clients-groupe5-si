@@ -151,3 +151,95 @@ presentation/             Présentation PowerPoint
 | DAG absent dans Airflow | `docker compose exec airflow-scheduler airflow dags list-import-errors` |
 | Import du template Zabbix refusé | Le message exact est affiché par `zabbix/setup_zabbix.py` (version Zabbix ≠ 7.0 : adapter `version:` ; format : `graphs` doit être au niveau de `zabbix_export`) |
 | Journal Zabbix : `host [...] not found` | `ZBX_HOSTNAME` de l'agent doit être identique au nom de l'hôte (`soap-clients-app`) |
+
+
+---
+
+## Annexe A : Prérequis matériels et premier démarrage
+
+- **Mémoire** : 8 Go de RAM minimum pour toute la pile (Airflow, Zabbix, MySQL ×2, MongoDB, PostgreSQL, Laravel). Sous Windows, Docker Desktop utilise WSL 2 : limiter sa mémoire à 6 Go dans `C:\Users\<utilisateur>\.wslconfig` (`[wsl2]` puis `memory=6GB`) si la machine ralentit.
+- **Disque** : environ 10 Go (images Docker comprises).
+- **Premier démarrage** : compter 10 à 20 minutes (téléchargement des images, initialisation d'Airflow, création de la base de Zabbix par `zabbix-server`).
+- **Ne pas interrompre `docker compose up -d`** (fermeture du terminal, `Ctrl+C`) : des services peuvent rester à l'état `Created`. Dans ce cas, relancer simplement `docker compose up -d` (la commande est idempotente), puis vérifier `docker compose ps -a`.
+- **Zabbix** : attendre que l'API réponde avant d'exécuter `zabbix/setup_zabbix.py` (la base de Zabbix est créée au premier démarrage, 5 à 10 minutes) :
+
+```bash
+for i in $(seq 1 60); do curl -s -X POST http://localhost:8082/api_jsonrpc.php -H "Content-Type: application/json-rpc" -d '{"jsonrpc":"2.0","method":"apiinfo.version","params":[],"id":1}' | grep -q '"result"' && { echo "Zabbix prêt"; break; }; echo "Zabbix pas encore prêt ($i/60)..."; sleep 15; done
+```
+
+## Annexe B : Lancer les scripts Python sans installer Python
+
+Les scripts `zabbix/setup_zabbix.py` et `tests/e2e/run_soap_tests.py` n'utilisent que la bibliothèque standard. Si Python n'est pas installé, on les exécute dans un conteneur jetable, depuis la racine du dépôt.
+
+**Git Bash (Windows)** :
+
+```bash
+# Import du template Zabbix et création de l'hôte
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w \
+  -e ZABBIX_URL=http://host.docker.internal:8082/api_jsonrpc.php \
+  python:3.12-slim python zabbix/setup_zabbix.py
+
+# Tests SOAP (sans le test de panne, qui nécessite le client Docker)
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w python:3.12-slim \
+  python tests/e2e/run_soap_tests.py --url http://host.docker.internal:8080 --db-down skip
+```
+
+**Linux / macOS** : remplacer `$(pwd -W)` par `$(pwd)`, supprimer `MSYS_NO_PATHCONV=1` et, sous Linux, ajouter `--add-host=host.docker.internal:host-gateway` à `docker run`.
+
+Avec Python 3 installé localement : `python3 zabbix/setup_zabbix.py` et `python3 tests/e2e/run_soap_tests.py --db-down docker`.
+
+## Annexe C : Procédure de recette (ordre conseillé)
+
+1. `cp .env.example .env` puis `docker compose up -d --build` ; attendre 3 à 5 minutes puis vérifier `docker compose ps -a` (`airflow-init` terminé avec le code 0, les autres services `Up` ou `healthy`).
+2. Attendre que Zabbix réponde (boucle de l'annexe A), puis exécuter `zabbix/setup_zabbix.py` (annexe B).
+3. Test de bout en bout de la chaîne principale :
+   `bash tests/e2e/run_pipeline_e2e.sh` : résultat attendu : **22 réussis, 0 échecs**.
+4. Tests SOAP détaillés (annexe B) : résultat attendu : **18/18**.
+5. Supervision : <http://localhost:8082> (`Admin` / `zabbix`), *Monitoring → Latest data*, hôte `soap-clients-app` : `soap.clients.total` = 201, `soap.mongodb.up` = 1. Simulation de panne : `docker compose stop mongo` (alerte « MongoDB indisponible » après environ 1 minute), puis `docker compose start mongo` (résolution automatique).
+6. Nettoyage complet : `docker compose down -v`.
+
+
+---
+
+## Annexe A : Prérequis matériels et premier démarrage
+
+- **Mémoire** : 8 Go de RAM minimum pour toute la pile (Airflow, Zabbix, MySQL ×2, MongoDB, PostgreSQL, Laravel). Sous Windows, Docker Desktop utilise WSL 2 : limiter sa mémoire à 6 Go dans `C:\Users\<utilisateur>\.wslconfig` (`[wsl2]` puis `memory=6GB`) si la machine ralentit.
+- **Disque** : environ 10 Go (images Docker comprises).
+- **Premier démarrage** : compter 10 à 20 minutes (téléchargement des images, initialisation d'Airflow, création de la base de Zabbix par `zabbix-server`).
+- **Ne pas interrompre `docker compose up -d`** (fermeture du terminal, `Ctrl+C`) : des services peuvent rester à l'état `Created`. Dans ce cas, relancer simplement `docker compose up -d` (la commande est idempotente), puis vérifier `docker compose ps -a`.
+- **Zabbix** : attendre que l'API réponde avant d'exécuter `zabbix/setup_zabbix.py` (la base de Zabbix est créée au premier démarrage, 5 à 10 minutes) :
+
+```bash
+for i in $(seq 1 60); do curl -s -X POST http://localhost:8082/api_jsonrpc.php -H "Content-Type: application/json-rpc" -d '{"jsonrpc":"2.0","method":"apiinfo.version","params":[],"id":1}' | grep -q '"result"' && { echo "Zabbix prêt"; break; }; echo "Zabbix pas encore prêt ($i/60)..."; sleep 15; done
+```
+
+## Annexe B : Lancer les scripts Python sans installer Python
+
+Les scripts `zabbix/setup_zabbix.py` et `tests/e2e/run_soap_tests.py` n'utilisent que la bibliothèque standard. Si Python n'est pas installé, on les exécute dans un conteneur jetable, depuis la racine du dépôt.
+
+**Git Bash (Windows)** :
+
+```bash
+# Import du template Zabbix et création de l'hôte
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w \
+  -e ZABBIX_URL=http://host.docker.internal:8082/api_jsonrpc.php \
+  python:3.12-slim python zabbix/setup_zabbix.py
+
+# Tests SOAP (sans le test de panne, qui nécessite le client Docker)
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w python:3.12-slim \
+  python tests/e2e/run_soap_tests.py --url http://host.docker.internal:8080 --db-down skip
+```
+
+**Linux / macOS** : remplacer `$(pwd -W)` par `$(pwd)`, supprimer `MSYS_NO_PATHCONV=1` et, sous Linux, ajouter `--add-host=host.docker.internal:host-gateway` à `docker run`.
+
+Avec Python 3 installé localement : `python3 zabbix/setup_zabbix.py` et `python3 tests/e2e/run_soap_tests.py --db-down docker`.
+
+## Annexe C : Procédure de recette (ordre conseillé)
+
+1. `cp .env.example .env` puis `docker compose up -d --build` ; attendre 3 à 5 minutes puis vérifier `docker compose ps -a` (`airflow-init` terminé avec le code 0, les autres services `Up` ou `healthy`).
+2. Attendre que Zabbix réponde (boucle de l'annexe A), puis exécuter `zabbix/setup_zabbix.py` (annexe B).
+3. Test de bout en bout de la chaîne principale :
+   `bash tests/e2e/run_pipeline_e2e.sh` : résultat attendu : **22 réussis, 0 échecs**.
+4. Tests SOAP détaillés (annexe B) : résultat attendu : **18/18**.
+5. Supervision : <http://localhost:8082> (`Admin` / `zabbix`), *Monitoring → Latest data*, hôte `soap-clients-app` : `soap.clients.total` = 201, `soap.mongodb.up` = 1. Simulation de panne : `docker compose stop mongo` (alerte « MongoDB indisponible » après environ 1 minute), puis `docker compose start mongo` (résolution automatique).
+6. Nettoyage complet : `docker compose down -v`.
