@@ -13,6 +13,16 @@ Exercice 7 : Laravel, Airflow, MySQL, MongoDB et Zabbix.
 | CONGO | Bénéré Nelson Cephas |
 | KONE | Assita |
 
+Répartition renseignée par le groupe dans la présentation :
+
+| Membre | Partie |
+|---|---|
+| KOANDA GILDAS | Infrastructure Docker, dépôt Git et README |
+| SANKARA Michail Alioun Juste | MySQL, jeu de données et DAG d’import |
+| BARRY EL NOUR | Service SOAP Laravel, WSDL et validation |
+| CONGO Bénéré Nelson Cephas | MongoDB, DAG de réconciliation |
+| KONE Assita | Zabbix, tests SoapUI et documentation |
+
 ## Objectif et architecture
 
 Les [spécifications](docs/SPECIFICATIONS.md) relient les exigences de l’exercice
@@ -46,8 +56,10 @@ flowchart LR
 ## Installation locale
 
 Prérequis : Git, Docker Engine démarré, Docker Compose v2 et Python 3.10 ou plus.
-Prévoir environ **6 Go de mémoire disponible** pour l’ensemble des services et
-de l’espace disque pour les images. Le premier téléchargement peut être long.
+Prévoir une machine avec **8 Go de RAM au minimum**, dont environ **6 Go
+disponibles** pour l’ensemble des services, et environ **10 Go de disque** pour
+les images et les données initiales. Ce sont des estimations de préparation,
+pas des mesures de consommation garanties. Le premier téléchargement peut être long.
 
 ```sh
 git clone --branch main https://github.com/gildaskoanda/soap-clients-groupe5-si.git
@@ -88,6 +100,13 @@ Suivre l’import dans Airflow jusqu’à `success`. Sur des bases neuves, atten
 **201 clients et 7 rejets** dans MongoDB. La découverte initiale des DAG peut
 prendre quelques minutes. Le [guide Zabbix](docs/SUPERVISION_ZABBIX.md) explique
 les métriques, les seuils et la démonstration de panne.
+
+Lors du premier démarrage, Zabbix doit créer sa base : cette étape peut prendre
+plusieurs minutes. Le script de configuration attend automatiquement l’API
+pendant dix minutes au maximum. Si des conteneurs restent à l’état `Created`
+après une interruption, relancer `docker compose up -d`, puis contrôler
+`docker compose ps -a`. Une attente dépassée doit être diagnostiquée avant de
+relancer la configuration ; elle ne justifie pas de supprimer les volumes.
 
 ### Arrêter et reprendre
 
@@ -178,3 +197,34 @@ celui qui l’ouvre et ne donne pas accès à celle du groupe.
 
 Cette livraison est préparée sur `main`. Si `master` reste la branche par défaut
 du dépôt, partager le lien de la branche `main` pour montrer cette version.
+
+Le [document Word](docs/DOCUMENTATION_SOAP.docx) ajouté par le groupe est conservé.
+Il correspond à la rédaction antérieure ; pour le contrat à jour, utiliser la
+[documentation Markdown](docs/DOCUMENTATION_SOAP.md) et le WSDL.
+
+## Annexe : scripts Python via Docker
+
+Si Python n’est pas installé sur la machine de démonstration, les scripts de
+configuration Zabbix et de tests SOAP peuvent utiliser un conteneur Python.
+Ces commandes supposent que `.env` a déjà été préparé et que la pile est démarrée.
+
+Sous **Git Bash / Windows** :
+
+```sh
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w \
+  -e ZABBIX_URL=http://host.docker.internal:8082/api_jsonrpc.php \
+  python:3.12-slim python zabbix/setup_zabbix.py
+
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w python:3.12-slim \
+  python tests/e2e/run_soap_tests.py --url http://host.docker.internal:8080 --db-down skip
+```
+
+Sous **Linux / macOS**, remplacer `$(pwd -W)` par `$(pwd)` et retirer
+`MSYS_NO_PATHCONV=1`. Sous Linux, ajouter également
+`--add-host=host.docker.internal:host-gateway` après `docker run --rm`.
+Ces variantes Windows/macOS sont des indications, pas des plateformes validées.
+
+Ce mode SOAP exécute **21 tests** : le conteneur Python n’a pas accès au client
+Docker, donc les deux tests de panne/reprise sont exclus. Pour la recette complète,
+suivre [le plan de tests](docs/TESTS.md) : **23 tests SOAP, 27 contrôles de chaîne
+complète et 9 contrôles Zabbix**, avec les pannes exécutées successivement.

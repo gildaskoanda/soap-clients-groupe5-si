@@ -15,7 +15,8 @@ et un agent. Après le démarrage décrit dans le README :
 python3 zabbix/setup_zabbix.py
 ```
 
-Le script attend l’API, importe le modèle, crée le groupe `SOAP Clients` et l’hôte
+Le script attend l’API jusqu’à dix minutes au premier démarrage, importe le modèle,
+crée le groupe `SOAP Clients` et l’hôte
 `soap-clients-app`. L’interface est accessible à `http://localhost:8082`.
 Les identifiants initiaux de l’image officielle sont `Admin` / `zabbix`.
 

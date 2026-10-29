@@ -46,7 +46,7 @@ def rpc(method, params, token=None):
     return out["result"]
 
 
-def wait_for_api(timeout=180):
+def wait_for_api(timeout=600):
     start = time.time()
     last_error = None
     while time.time() - start < timeout:
