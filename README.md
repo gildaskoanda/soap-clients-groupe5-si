@@ -2,7 +2,15 @@
 
 Projet *Développement à base de composants et services web* — IBAM, 2026 — **Groupe 5 SI, thème n° 7**.
 
-> Membres du groupe : _à compléter (5 noms)_
+> **Membres du groupe (Sécurité informatique — SI)**
+>
+> | Nom | Prénom(s) |
+> |---|---|
+> | SANKARA | Michail Alioun Juste |
+> | KOANDA | Gildas |
+> | BARRY | El Nour |
+> | CONGO | Bénéré Nelson Cephas |
+> | KONE | Assita |
 
 ## 1. Objectif
 
