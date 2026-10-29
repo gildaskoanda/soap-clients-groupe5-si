@@ -31,6 +31,8 @@ Exécution : `python3 tests/e2e/run_soap_tests.py --db-down docker --report docs
 
 ## 3. Scénario de bout en bout (obligatoire) : MySQL → Airflow → MongoDB → SOAP → MongoDB → Airflow → MySQL
 
+Sur une base neuve (`docker compose down -v` puis `docker compose up -d --build`), la version de CLI-000010 vaut 1. Si d'autres tests ont déjà modifié ce client (par exemple `run_soap_tests.py`, cas T10), on note **v** la version lue à l'étape 6 et on raisonne à partir d'elle.
+
 | Étape | Action | Résultat attendu |
 |---|---|---|
 | 1 | `docker compose up -d --build` puis `docker compose ps` | mysql, mongo, laravel : `healthy` |
@@ -38,14 +40,14 @@ Exécution : `python3 tests/e2e/run_soap_tests.py --db-down docker --report docs
 | 3 | `docker compose exec airflow-scheduler airflow dags trigger clients_mysql_to_mongo` puis attendre ~30 s | DAG en `success` (UI : <http://localhost:8081>) |
 | 4 | `mongosh` : `db.clients.countDocuments()` et `db.clients_rejected.countDocuments()` | **201** et **7** ; `db.etl_runs.find().sort({finished_at:-1}).limit(1)` → `inserted: 201, rejected: 7` |
 | 5 | Relancer le DAG 1 (idempotence) | `etl_runs` : `inserted: 0, updated: 0, unchanged: 201` |
-| 6 | SoapUI : `getClientDetails CLI-000010` | client, `version 1`, `synchronisation synced` |
-| 7 | SoapUI : `updateClient CLI-000010 ville=Ouagadougou` | `version 2`, `synchronisation pending_mysql` |
+| 6 | SoapUI : `getClientDetails CLI-000010` | client, `version` = **v** (1 sur une base neuve), `synchronisation synced` |
+| 7 | SoapUI : `updateClient CLI-000010 ville=Ouagadougou` | `version` = **v + 1**, `synchronisation pending_mysql` |
 | 8 | MySQL : `SELECT ville FROM clients WHERE code_client='CLI-000010'` | **ancienne ville** (MySQL pas encore à jour : écriture uniquement dans la référence) |
 | 9 | Zabbix (ou `curl localhost:8080/monitoring/stats`) | `pending_reconciliation: 1` |
 | 10 | `docker compose exec airflow-scheduler airflow dags trigger clients_reconcile_mongo_to_mysql` puis attendre ~20 s | DAG `success` |
 | 11 | MySQL : même `SELECT` qu'à l'étape 8 | **Ouagadougou** |
-| 12 | `getClientDetails CLI-000010` | `synchronisation synced`, `version 2` |
-| 13 | `db.reconciliation_log.find({code_client:'CLI-000010'})` | une entrée `action: "applied"` |
+| 12 | `getClientDetails CLI-000010` | `synchronisation synced`, `version` = **v + 1** (inchangée depuis l'étape 7) |
+| 13 | `db.reconciliation_log.find({code_client:'CLI-000010'})` | au moins une entrée `action: "applied"` |
 | 14 | Conflit : modifier la ville dans MySQL **et** via SOAP, relancer le DAG 2 | `applied_conflict_mongo_wins`, la ville SOAP l'emporte, ancienne ligne MySQL dans `mysql_overwritten` |
 
 ## 4. Tests SoapUI (manuels)
