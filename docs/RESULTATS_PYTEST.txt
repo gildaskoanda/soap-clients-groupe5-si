@@ -1,12 +1,12 @@
 tests/test_etl.py::test_validate_ok PASSED
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
-tests/test_etl.py::test_validate_rejects
+tests/test_etl.py::test_validate_rejects[over0-email_invalide] PASSED
+tests/test_etl.py::test_validate_rejects[over1-email_invalide] PASSED
+tests/test_etl.py::test_validate_rejects[over2-telephone_invalide] PASSED
+tests/test_etl.py::test_validate_rejects[over3-nom_invalide] PASSED
+tests/test_etl.py::test_validate_rejects[over4-nom_manquant] PASSED
+tests/test_etl.py::test_validate_rejects[over5-prenom_manquant] PASSED
+tests/test_etl.py::test_validate_rejects[over6-code_client_invalide] PASSED
+tests/test_etl.py::test_validate_rejects[over7-statut_invalide] PASSED
 tests/test_etl.py::test_transform_normalizes PASSED
 tests/test_etl.py::test_first_load_inserts_and_logs_rejects PASSED
 tests/test_etl.py::test_idempotent_rerun_changes_nothing PASSED
@@ -19,4 +19,4 @@ tests/test_etl.py::test_reconcile_is_idempotent PASSED
 tests/test_etl.py::test_conflict_mongo_wins_and_keeps_audit PASSED
 tests/test_etl.py::test_row_missing_in_mysql_flags_conflict PASSED
 tests/test_etl.py::test_failure_on_one_client_does_not_block_others PASSED
-============================== 21 passed in 0.19s ==============================
+============================== 21 passed in 0.27s ==============================
