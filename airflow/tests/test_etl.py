@@ -2,6 +2,7 @@
 import os
 import sys
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import mongomock
 import pytest
@@ -9,6 +10,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dags"))
 from clients_etl import etl, rules  # noqa: E402
 from clients_etl.reconcile import reconcile  # noqa: E402
+from clients_etl.reconcile import MySqlGateway  # noqa: E402
+from pymongo.errors import WriteError  # noqa: E402
 
 
 def row(i, **over):
@@ -99,6 +102,47 @@ def test_duplicate_email_in_batch_rejected(db):
     assert s["inserted"] == 1 and db.clients_rejected.find_one({"code_client": "CLI-000002"})["reasons"] == ["email_duplique_dans_lot"]
 
 
+@pytest.mark.parametrize("same_timestamp", [False, True])
+def test_old_extract_cannot_undo_reconciled_soap_change(db, same_timestamp):
+    """Un lot extrait avant le retour MySQL ne doit pas annuler la modification SOAP."""
+    original = row(1)
+    run(db, [original])
+    stamp = datetime.fromisoformat(original["updated_at"]) if same_timestamp else datetime(2026, 10, 10)
+    db.clients.update_one({"code_client": "CLI-000001"}, {"$set": {
+        "ville": "Kaya", "source": "soap", "locally_modified": False,
+        "sync_status": "synced", "mysql_updated_at": stamp,
+    }, "$inc": {"version": 1}})
+    before = db.clients.find_one({"code_client": "CLI-000001"})
+    stats = run(db, [original], "old-extract")
+    assert db.clients.find_one({"code_client": "CLI-000001"}) == before
+    assert stats["conflicts_skipped"] == 1 and stats["updated"] == 0
+
+
+def test_old_source_timestamp_is_not_reimported(db):
+    run(db, [row(1, ville="Kaya", updated_at="2026-10-05T10:00:00")])
+    stats = run(db, [row(1)], "old-extract")
+    assert db.clients.find_one({"code_client": "CLI-000001"})["ville"] == "Kaya"
+    assert stats["conflicts_skipped"] == 1
+
+
+def test_concurrent_soap_write_is_preserved_and_counted(db, monkeypatch):
+    run(db, [row(1)])
+    original_find = db.clients.find
+
+    def read_then_soap(*args, **kwargs):
+        snapshot = list(original_find(*args, **kwargs))
+        db.clients.update_one({"code_client": "CLI-000001"}, {"$set": {
+            "ville": "Kaya", "source": "soap", "locally_modified": True,
+        }, "$inc": {"version": 1}})
+        return iter(snapshot)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(db.clients, "find", read_then_soap)
+        stats = run(db, [row(1, ville="Dori")], "concurrent")
+    assert db.clients.find_one({"code_client": "CLI-000001"})["ville"] == "Kaya"
+    assert stats["updated"] == 0 and stats["conflicts_skipped"] == 1
+
+
 # --- réconciliation ------------------------------------------------------------------------------
 class FakeMySql:
     def __init__(self, rows):
@@ -174,3 +218,90 @@ def test_failure_on_one_client_does_not_block_others(db):
     st = reconcile(db, my, "rec1")
     assert st["failed"] == 1 and st["applied"] == 1
     assert db.clients.find_one({"code_client": "CLI-000001"})["locally_modified"] is True
+
+
+def test_existing_email_collision_is_rejected_with_correct_code(db):
+    run(db, [row(1)])
+    stats = run(db, [row(2, email="a1@example.bf")])
+    assert stats["inserted"] == 0 and stats["rejected"] == 1
+    assert db.clients_rejected.find_one({"code_client": "CLI-000002"})["reasons"] == ["ecriture_refusee:11000"]
+
+
+def test_metadata_refresh_preserves_business_version(db):
+    run(db, [row(1)])
+    stats = run(db, [row(1, updated_at="2026-10-10T09:00:00")])
+    doc = db.clients.find_one({"code_client": "CLI-000001"})
+    assert stats["unchanged"] == 1 and doc["version"] == 1
+    assert doc["mysql_updated_at"] == datetime(2026, 10, 10, 9)
+
+
+def test_technical_write_failure_is_not_reported_as_success(db, monkeypatch):
+    def fail(*args, **kwargs):
+        raise WriteError("Erreur technique", code=91)
+    monkeypatch.setattr(db.clients, "insert_one", fail)
+    with pytest.raises(WriteError):
+        run(db, [row(1)])
+    assert db.etl_runs.count_documents({}) == 0
+
+
+def test_extract_converts_dates_and_keeps_column_names():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.description = [(name,) for name in ("id", "date_inscription", "updated_at")]
+    cursor.fetchall.return_value = [(1, datetime(2026, 1, 1).date(), datetime(2026, 10, 10, 9)), (2, None, None)]
+    assert etl.extract(conn) == [
+        {"id": 1, "date_inscription": "2026-01-01", "updated_at": "2026-10-10T09:00:00"},
+        {"id": 2, "date_inscription": None, "updated_at": None},
+    ]
+
+
+def test_reconciliation_preserves_new_soap_version(db):
+    seed_modified(db)
+    my = mysql_for(db)
+    original_update = my.update
+    def racing_update(code, fields):
+        stamp = original_update(code, fields)
+        db.clients.update_one({"code_client": code}, {"$set": {"ville": "Dori", "source": "soap"}, "$inc": {"version": 1}})
+        return stamp
+    my.update = racing_update
+    stats = reconcile(db, my, "race")
+    doc = db.clients.find_one({"code_client": "CLI-000001"})
+    assert stats["raced"] == 1 and doc["locally_modified"] is True and doc["ville"] == "Dori"
+    assert my.rows["CLI-000001"]["ville"] == "Kaya"
+
+
+def test_audit_failure_keeps_change_pending(db, monkeypatch):
+    seed_modified(db)
+    my = mysql_for(db)
+    insert = db.reconciliation_log.insert_one
+    calls = 0
+    def unavailable_once(document):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("Journal momentanément indisponible")
+        return insert(document)
+    monkeypatch.setattr(db.reconciliation_log, "insert_one", unavailable_once)
+    stats = reconcile(db, my, "audit-failure")
+    assert stats["failed"] == 1
+    assert db.clients.find_one({"code_client": "CLI-000001"})["locally_modified"] is True
+
+
+def test_mysql_gateway_locks_row_and_commits_parameterized_update():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.description = [("id",), ("ville",)]
+    cursor.fetchone.side_effect = [(1, "Kaya"), (datetime(2026, 10, 10),)]
+    gateway = MySqlGateway(conn)
+    assert gateway.get_row("CLI-000001") == {"id": 1, "ville": "Kaya"}
+    query, params = cursor.execute.call_args.args
+    assert query.endswith("FOR UPDATE") and params == ("CLI-000001",)
+    assert gateway.update("CLI-000001", {"ville": "Dori"}) == datetime(2026, 10, 10)
+    conn.commit.assert_called_once()
+    gateway.rollback()
+    conn.rollback.assert_called_once()
+
+
+def test_blank_email_is_rejected_and_date_object_normalized():
+    assert "email_manquant" in rules.validate(row(1, email=" "))
+    assert rules.transform(row(1, date_inscription=datetime(2026, 1, 1).date()))["date_inscription"] == "2026-01-01"

@@ -25,7 +25,7 @@ class SoapEndpoint
     public function handle(string $envelope, string $endpointUrl): array
     {
         if (trim($envelope) === '') {
-            return [400, $this->plainFault('Client', 'Enveloppe SOAP vide.')];
+            return [500, $this->plainFault('Client', 'Enveloppe SOAP vide.')];
         }
 
         $wsdlFile = $this->materializeWsdl($endpointUrl);

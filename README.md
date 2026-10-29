@@ -1,153 +1,180 @@
-# Service SOAP de clients — Laravel · Airflow · MongoDB · Zabbix
+# Service SOAP de clients — Groupe 5 SI
 
-Projet *Développement à base de composants et services web* — IBAM, 2026 — **Groupe 5 SI, thème n° 7**.
+Projet **Développement à base de composants et services web**, IBAM, 2026.
+Exercice 7 : Laravel, Airflow, MySQL, MongoDB et Zabbix.
 
-> Membres du groupe : _à compléter (5 noms)_
+## Membres
 
-## 1. Objectif
+| Nom | Prénoms |
+|---|---|
+| SANKARA | Michail Alioun Juste |
+| KOANDA | GILDAS |
+| BARRY | EL NOUR |
+| CONGO | Bénéré Nelson Cephas |
+| KONE | Assita |
 
-Exposer un **service SOAP** de gestion de clients dont la **base de référence est MongoDB**.
-Les clients fictifs naissent dans **MySQL** ; **Airflow** les contrôle et les charge dans MongoDB ;
-le service **Laravel** lit et modifie MongoDB ; les modifications sont **renvoyées vers MySQL** par un second DAG ;
-**Zabbix** supervise l'ensemble.
+## Objectif et architecture
 
-## 2. Architecture
+Les [spécifications](docs/SPECIFICATIONS.md) relient les exigences de l’exercice
+aux choix techniques et aux critères de réception.
+
+Le service permet de consulter, rechercher et modifier des clients fictifs.
+MySQL fournit les données initiales ; Airflow les contrôle et les charge dans
+MongoDB. **MongoDB est la base de référence du service SOAP.** Un second DAG
+renvoie les modifications SOAP vers MySQL. Zabbix surveille l’ensemble.
 
 ```mermaid
 flowchart LR
-  subgraph Source
-    MY[(MySQL 8<br/>clients_src)]
-  end
-  subgraph Orchestration
-    D1[DAG 1<br/>clients_mysql_to_mongo]
-    D2[DAG 2<br/>clients_reconcile_mongo_to_mysql]
-  end
-  subgraph Reference
-    MO[(MongoDB 7<br/>clients_db - BASE DE REFERENCE)]
-  end
-  SOAP[Laravel 12<br/>Service SOAP /soap/clients]
-  CL[Client SOAP<br/>SoapUI / applications]
-  ZB[Zabbix 7.0<br/>server + web + agent2]
-
-  MY -->|extraction + contrôle qualité| D1 -->|upsert idempotent| MO
-  MO -->|clients modifiés| D2 -->|UPDATE| MY
-  CL -->|SOAP 1.1 / WSDL| SOAP <-->|lecture / écriture| MO
-  ZB -.->|HTTP agent : /health, /monitoring/stats| SOAP
-  ZB -.->|agent| ZB
+    MY[(MySQL : source)] -->|DAG d’import| AF[Airflow]
+    AF --> MO[(MongoDB : référence)]
+    CL[SoapUI ou autre application] <-->|SOAP / XML| L[Laravel + SoapServer]
+    L <--> MO
+    MO -->|DAG de réconciliation| MY
+    Z[Zabbix] -.->|WSDL, requête SOAP, santé et métriques| L
 ```
 
-| Composant | Rôle | Port hôte |
-|---|---|---|
-| `mysql` | Source : table `clients` (208 lignes fictives dont 7 invalides à dessein) | 3307 |
-| `mongo` | **Base de référence** : `clients`, `clients_rejected`, `etl_runs`, `reconciliation_log`, `soap_calls` | 27018 |
-| `airflow-*` | 2 DAG (`@hourly` et `30 * * * *`), LocalExecutor + PostgreSQL | 8081 |
-| `laravel` | Service SOAP (ext-soap) + endpoints `/health` et `/monitoring/stats` | 8080 |
-| `zabbix-*` | Serveur, interface web, agent 2 | 8082 |
+| Exigence | Réalisation |
+|---|---|
+| Clients MySQL | Schéma et 208 lignes fictives : 201 valides, 7 volontairement invalides |
+| Chargement Airflow | Extraction, validation, normalisation, chargement sans doublon et rejets tracés |
+| SOAP Laravel | Les trois opérations demandées ; WSDL 1.1 / SOAP 1.1 |
+| Documentation du contrat | [Paramètres, réponses, validations et Faults](docs/DOCUMENTATION_SOAP.md) |
+| Référence MongoDB | Toutes les opérations SOAP utilisent MongoDB |
+| Supervision et tests | Modèle Zabbix, tests automatisés et requêtes SoapUI |
+| Retour vers MySQL | DAG de réconciliation et [stratégie documentée](docs/RECONCILIATION.md) |
 
-## 3. Prérequis
+## Installation locale
 
-- Docker ≥ 24 et Docker Compose v2 (`docker compose version`)
-- ~6 Go de RAM libres, ports 3307, 8080, 8081, 8082, 10051, 27018 disponibles
-- Python 3.9+ (uniquement pour les scripts de test et la configuration Zabbix, bibliothèque standard)
-- Optionnel : SoapUI 5.7+ (tests manuels), PHP 8.3 avec `ext-soap` (tests sans Docker)
+Prérequis : Git, Docker Engine démarré, Docker Compose v2 et Python 3.10 ou plus.
+Prévoir environ **6 Go de mémoire disponible** pour l’ensemble des services et
+de l’espace disque pour les images. Le premier téléchargement peut être long.
 
-## 4. Installation (machine neuve)
-
-```bash
-git clone <URL-DU-DEPOT> soap-clients && cd soap-clients
-cp .env.example .env            # optionnel : tous les paramètres ont une valeur par défaut
-docker compose up -d --build    # 1er démarrage : 5 à 10 min (images + Laravel via Composer)
-docker compose ps               # attendre que mysql, mongo, laravel soient « healthy »
+```sh
+git clone --branch main https://github.com/gildaskoanda/soap-clients-groupe5-si.git
+cd soap-clients-groupe5-si
+python3 scripts/prepare_env.py
+docker compose config --quiet
+docker compose build
+docker compose up -d
+docker compose ps
 ```
 
-Vérifications rapides :
+Le script crée `.env` avec des secrets aléatoires et préserve une configuration
+existante. Ce fichier est exclu de Git. Le démarrage initialise les bases vides
+et les métadonnées Airflow ; aucune migration Laravel n’est nécessaire pour les
+clients. Attendre que les services soient prêts avant de lancer les tests.
 
-| Quoi | Commande / URL | Attendu |
+| Service | Adresse locale | Accès |
 |---|---|---|
-| WSDL | <http://localhost:8080/soap/clients?wsdl> | document XML `ClientService` |
-| Santé | `curl localhost:8080/health` | `{"status":"ok","mongodb":"up"}` |
-| Airflow | <http://localhost:8081> (admin / admin) | 2 DAG actifs |
-| Zabbix | <http://localhost:8082> (Admin / zabbix) | assistant d'installation déjà fait par l'image |
+| Accueil Laravel | http://localhost:8080 | Page d’accueil du framework |
+| WSDL | http://localhost:8080/soap/clients?wsdl | Contrat XML |
+| Santé Laravel + MongoDB | http://localhost:8080/health | `status=ok`, `mongodb=up` |
+| Airflow | http://localhost:8081 | Identifiants définis dans `.env` |
+| Zabbix | http://localhost:8082 | Initialement `Admin` / `zabbix` |
+| MySQL | `127.0.0.1:3307` | Identifiants de `.env` |
+| MongoDB | `127.0.0.1:27018` | Identifiants de `.env` |
 
-### 4.1 Charger MongoDB (DAG 1)
-Le DAG `clients_mysql_to_mongo` démarre automatiquement (non en pause). Pour ne pas attendre l'heure suivante :
+Entre conteneurs, les noms d’hôte sont `mysql`, `mongo`, `laravel`, etc.
+Tous les ports publiés sont limités à la machine locale.
 
-```bash
+### Charger les clients et configurer Zabbix
+
+```sh
 docker compose exec airflow-scheduler airflow dags trigger clients_mysql_to_mongo
-docker compose exec mongo mongosh "mongodb://app:app_password@localhost/clients_db?authSource=clients_db" \
-  --eval 'printjson({clients: db.clients.countDocuments(), rejetes: db.clients_rejected.countDocuments()})'
-```
-Attendu : **201 clients** chargés, **7 rejetés** (motifs dans `clients_rejected`).
-
-### 4.2 Configurer Zabbix (procédure distincte, outil à installation particulière)
-```bash
-python3 zabbix/setup_zabbix.py          # importe le template, crée l'hôte soap-clients-app
-```
-Détails et procédure manuelle : [`docs/SUPERVISION_ZABBIX.md`](docs/SUPERVISION_ZABBIX.md).
-
-## 5. Utilisation du service SOAP
-
-- **WSDL** : `http://localhost:8080/soap/clients?wsdl` — **Endpoint** : `POST http://localhost:8080/soap/clients`
-- Opérations : `getClientDetails`, `searchClients`, `updateClient` (document/literal, SOAP 1.1)
-- Documentation complète (paramètres, réponses, règles de validation, Faults) : [`docs/DOCUMENTATION_SOAP.md`](docs/DOCUMENTATION_SOAP.md)
-
-Exemple :
-```bash
-curl -s -X POST http://localhost:8080/soap/clients -H 'Content-Type: text/xml' \
-  --data @tests/soapui/requests/01_getClientDetails_ok.xml
+python3 zabbix/setup_zabbix.py
 ```
 
-## 6. Tests
+Suivre l’import dans Airflow jusqu’à `success`. Sur des bases neuves, attendre
+**201 clients et 7 rejets** dans MongoDB. La découverte initiale des DAG peut
+prendre quelques minutes. Le [guide Zabbix](docs/SUPERVISION_ZABBIX.md) explique
+les métriques, les seuils et la démonstration de panne.
 
-| Niveau | Commande | Couvre |
-|---|---|---|
-| **Chaîne complète (Docker)** | `bash tests/e2e/run_pipeline_e2e.sh` | MySQL → DAG 1 → MongoDB → SOAP → DAG 2 → MySQL, idempotence, protection des modifications |
-| **SOAP (Docker)** | `python3 tests/e2e/run_soap_tests.py --db-down docker` | WSDL, 3 opérations, codes de Fault, panne puis reprise de MongoDB |
-| ETL + réconciliation | `pip install -r airflow/requirements-dev.txt && pytest airflow/tests -v` | 21 tests (qualité, idempotence, conflits, réconciliation) |
-| SOAP sans Docker | `php -S 127.0.0.1:8099 tests/harness/server.php` puis `python3 tests/e2e/run_soap_tests.py --url http://127.0.0.1:8099 --db-down harness` | couche SOAP seule (dépôt en mémoire) |
-| SoapUI | importer le WSDL, coller les requêtes de `tests/soapui/requests/` | voir [`docs/TESTS.md`](docs/TESTS.md) |
+### Arrêter et reprendre
 
-**Scénario de bout en bout (obligatoire)** : `docs/TESTS.md` §3 — modification SOAP → MongoDB → DAG 2 → MySQL, avec les résultats attendus.
-
-## 7. Stratégie de réconciliation MongoDB → MySQL
-
-MongoDB est la référence. `updateClient` marque le document (`locally_modified`, `sync_status=pending_mysql`, `version+1`) ;
-le DAG 2 renvoie les champs vers MySQL, détecte les conflits (ligne MySQL modifiée entre-temps : **MongoDB l'emporte**, l'ancienne valeur est archivée),
-et ne remet à zéro le drapeau que si aucune nouvelle modification n'est arrivée. Le DAG 1 ne réécrase **jamais** un client modifié côté Mongo.
-Détails : [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md).
-
-## 8. Arborescence
-
-```
-docker-compose.yml        Pile complète (11 services)
-docker/laravel.Dockerfile PHP 8.3 + ext-soap + ext-mongodb + Laravel 12
-db/mysql, db/mongo        Schéma, jeu de données (générateur déterministe), init MongoDB (index, JSON Schema)
-airflow/dags              2 DAG + package clients_etl (rules, etl, reconcile) ; airflow/tests = pytest
-laravel-app/          Code du service (projet Laravel 12 complet, composer.lock inclus) : WSDL, SOAP, dépôt Mongo
-zabbix/                   Template YAML + script de configuration par API
-tests/                    e2e Python, requêtes SoapUI, serveur de test PHP
-docs/                     Documentation SOAP, réconciliation, supervision, tests, résultats
-presentation/             Présentation PowerPoint
+```sh
+docker compose stop
+docker compose start
 ```
 
-## 9. État de validation (honnêteté technique)
+Les volumes conservent les données. `docker compose down` retire les conteneurs
+et le réseau mais conserve les volumes. Ne pas ajouter `-v` pour un simple
+redémarrage : cette option supprime les données du projet.
 
-| Élément | Validé comment |
+Après une modification de Laravel : `docker compose up -d --build laravel`.
+Les DAG sont montés directement depuis `airflow/dags`.
+
+## Tests et preuves
+
+Le [plan de tests](docs/TESTS.md) précise les prérequis et les résultats attendus.
+Les [résultats de validation](docs/RESULTATS_VALIDATION.md) distinguent les tests
+sur bases simulées des tests sur services réels.
+
+```sh
+# Tests Python isolés
+python3 -m venv .venv
+.venv/bin/python -m pip install -r airflow/requirements-dev.txt
+.venv/bin/python -m pytest airflow/tests -v --cov=airflow/dags/clients_etl
+
+# SOAP : arrête puis redémarre MongoDB pour vérifier la panne
+python3 tests/e2e/run_soap_tests.py --db-down docker --report docs/RESULTATS_TESTS_DOCKER.md
+
+# Chaîne complète : nécessite Bash, Python 3, curl et les services démarrés
+bash tests/e2e/run_pipeline_e2e.sh
+
+# Supervision réelle : collecte, panne MongoDB, alerte et rétablissement
+python3 tests/e2e/run_zabbix_tests.py --simulate-outage
+```
+
+Ces tests modifient des fiches fictives : utiliser l’environnement de démonstration.
+Les tests de panne doivent être exécutés successivement, jamais en parallèle.
+Sous Windows, utiliser WSL ou Git Bash pour le scénario shell et
+`.venv\Scripts\python.exe` pour l’environnement Python natif.
+
+## Organisation
+
+| Dossier | Contenu |
 |---|---|
-| Couche SOAP (WSDL, 3 opérations, Faults, validation) | **Exécutée** : 20/20 tests e2e sur serveur PHP 8.3 + client `SoapClient` PHP — rapport `docs/RESULTATS_TESTS_HARNESS.md` |
-| ETL, qualité, idempotence, réconciliation | **Exécutés** : 21 tests pytest (MongoDB simulé par `mongomock`) |
-| DAG Airflow | **Importés** dans Airflow 2.9.3 réel, sans erreur ; graphe de tâches vérifié |
-| `MongoClientRepository`, image Laravel, `docker-compose.yml` | **Validés sur pile Docker réelle** (octobre 2026) : 18/18 tests SOAP (`docs/RESULTATS_TESTS_DOCKER.md`), panne et reprise de MongoDB, scénario MySQL → Airflow → MongoDB → SOAP → Airflow → MySQL |
-| Template Zabbix | **Importé dans Zabbix 7.0.32** via `zabbix/setup_zabbix.py` ; métriques reçues, alerte « MongoDB indisponible » testée |
+| `airflow/` | Deux DAG, traitements et tests Python |
+| `db/` | Schéma MySQL, données fictives et initialisation MongoDB |
+| `docker/` | Image PHP / Apache |
+| `laravel-app/` | Application Laravel, service SOAP et WSDL |
+| `zabbix/` | Modèle et script de configuration |
+| `tests/` | Tests SOAP, chaîne complète et requêtes SoapUI |
+| `docs/` | Contrat, réconciliation, supervision, tests et démonstration |
+| `presentation/` | Présentation PowerPoint |
+| `scripts/` | Préparation de l’environnement et outils de livraison |
 
-### Dépannage probable au premier lancement
-| Symptôme | Cause / action |
+## Choix et limites
+
+Une fiche modifiée par SOAP reste gérée par MongoDB après réconciliation :
+un ancien lot MySQL ne peut pas la réécraser. Le retour MySQL est différé et
+les deux bases ne partagent pas de transaction.
+
+Le service ne propose ni création ni suppression de clients. Cette démonstration
+locale utilise des données fictives, sans authentification SOAP ni terminaison
+HTTPS. Les versions majeures de l’environnement d’origine sont conservées ;
+une mise en production demanderait une étude de support et de sécurité.
+
+## Dépannage
+
+| Symptôme | Vérification |
 |---|---|
-| Docker : « failed to connect to the docker API » / erreur 500 sur `_ping` | Docker Desktop n'est pas (encore) démarré : attendre « Engine running » ; sinon `wsl --update` puis `wsl --shutdown` et relancer Docker Desktop |
-| Build `laravel` : Composer refuse `laravel/framework` (« security advisories ») | Version de Laravel hors support. Le Dockerfile utilise Laravel 12 ; ne pas désactiver `policy.advisories.block` |
-| Build `laravel` : `mongodb/mongodb` incompatible avec `ext-mongodb` | Garder l'extension et la bibliothèque sur la même branche (1.21.x ↔ ^1.21) |
-| `laravel` ne devient pas healthy | `docker compose logs laravel` ; vérifier la compilation de `pecl install mongodb-1.21.10` |
-| WSDL OK mais Fault `SERVICE_UNAVAILABLE` | Mongo non prêt ou mot de passe `.env` différent de celui d'init (supprimer les volumes : `docker compose down -v`) |
-| DAG absent dans Airflow | `docker compose exec airflow-scheduler airflow dags list-import-errors` |
-| Import du template Zabbix refusé | Le message exact est affiché par `zabbix/setup_zabbix.py` (version Zabbix ≠ 7.0 : adapter `version:` ; format : `graphs` doit être au niveau de `zabbix_export`) |
-| Journal Zabbix : `host [...] not found` | `ZBX_HOSTNAME` de l'agent doit être identique au nom de l'hôte (`soap-clients-app`) |
+| Docker inaccessible | Démarrer Docker Engine / Docker Desktop |
+| Port occupé | Libérer le port ou adapter son mapping et les URL des tests |
+| DAG absent | Attendre son analyse ; vérifier `airflow dags list-import-errors` |
+| Fault `SERVICE_UNAVAILABLE` | Vérifier MongoDB et la cohérence des identifiants |
+| Mot de passe changé sans effet | Modifier `.env` ne modifie pas un compte déjà créé dans une base |
+| Import Zabbix refusé | Lire le message du script et utiliser Zabbix 7.0 |
+
+## Présentation et remise
+
+Le [guide de démonstration](docs/GUIDE_DEMONSTRATION.md) fournit le scénario.
+Le [PowerPoint](presentation/PRESENTATION_SOAP_CLIENTS.pptx) présente le groupe,
+l’architecture et les éléments à démontrer.
+
+Après relecture et publication par le groupe, transmettre le lien du dépôt public
+selon les consignes de l’enseignant. Un lien `localhost` désigne la machine de
+celui qui l’ouvre et ne donne pas accès à celle du groupe.
+
+Cette livraison est préparée sur `main`. Si `master` reste la branche par défaut
+du dépôt, partager le lien de la branche `main` pour montrer cette version.

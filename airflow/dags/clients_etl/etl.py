@@ -1,8 +1,7 @@
 """Extraction MySQL, contrôle qualité et chargement idempotent dans MongoDB."""
 from datetime import datetime, timezone
 
-from pymongo import InsertOne, UpdateOne
-from pymongo.errors import BulkWriteError
+from pymongo.errors import DuplicateKeyError, WriteError
 
 from .rules import BUSINESS_FIELDS, transform, validate
 
@@ -49,7 +48,7 @@ def load(db, valid: list, rejected: list, run_id: str, extracted: int, started_a
     """Charge dans MongoDB de façon idempotente et journalise l'exécution.
 
     - nouveau code_client            -> insertion (version 1, sync_status=synced)
-    - existant, modifié dans Mongo   -> NON écrasé (Mongo est la référence), compté dans conflicts_skipped
+    - existant, géré par SOAP        -> NON écrasé, même après réconciliation
     - existant, données différentes  -> mise à jour + version+1
     - existant, identique            -> aucune écriture métier
     """
@@ -60,38 +59,49 @@ def load(db, valid: list, rejected: list, run_id: str, extracted: int, started_a
     codes = [d["code_client"] for d in valid]
     existing = {d["code_client"]: d for d in clients.find({"code_client": {"$in": codes}})} if codes else {}
 
-    ops, stats = [], {"inserted": 0, "updated": 0, "unchanged": 0, "conflicts_skipped": 0}
+    rejected = list(rejected)
+    stats = {"inserted": 0, "updated": 0, "unchanged": 0, "conflicts_skipped": 0}
     for doc in valid:
         cur = existing.get(doc["code_client"])
-        if cur is None:
-            ops.append(InsertOne({**doc, "version": 1, "locally_modified": False, "sync_status": "synced",
-                                  "source": "mysql", "loaded_at": now, "updated_at": now}))
-            stats["inserted"] += 1
-        elif cur.get("locally_modified"):
-            stats["conflicts_skipped"] += 1
-        else:
+        try:
+            if cur is None:
+                clients.insert_one({**doc, "version": 1, "locally_modified": False,
+                                    "sync_status": "synced", "source": "mysql",
+                                    "loaded_at": now, "updated_at": now})
+                stats["inserted"] += 1
+                continue
+
+            previous_ts, incoming_ts = cur.get("mysql_updated_at"), doc.get("mysql_updated_at")
+            stale = previous_ts is not None and (incoming_ts is None or incoming_ts < previous_ts)
+            if cur.get("locally_modified") or cur.get("source") == "soap" or stale:
+                stats["conflicts_skipped"] += 1
+                continue
+
+            # Compare-and-set : la fiche doit encore correspondre à notre lecture.
+            # La propriété SOAP persiste après réconciliation, même si les dates
+            # MySQL sont identiques à la seconde près.
+            condition = {"_id": cur["_id"], "version": cur["version"],
+                         "locally_modified": {"$ne": True}, "source": {"$ne": "soap"},
+                         "mysql_updated_at": previous_ts}
             changed = any(cur.get(f) != doc.get(f) for f in BUSINESS_FIELDS)
             if changed:
-                ops.append(UpdateOne({"_id": cur["_id"], "version": cur["version"]},
-                                     {"$set": {**doc, "updated_at": now, "source": "mysql"}, "$inc": {"version": 1}}))
-                stats["updated"] += 1
+                result = clients.update_one(condition, {
+                    "$set": {**doc, "updated_at": now, "source": "mysql"}, "$inc": {"version": 1},
+                })
+                stats["updated" if result.matched_count else "conflicts_skipped"] += 1
+            elif previous_ts != incoming_ts:
+                result = clients.update_one(condition, {"$set": {"mysql_updated_at": incoming_ts}})
+                stats["unchanged" if result.matched_count else "conflicts_skipped"] += 1
             else:
                 stats["unchanged"] += 1
-                if cur.get("mysql_updated_at") != doc["mysql_updated_at"]:
-                    ops.append(UpdateOne({"_id": cur["_id"]}, {"$set": {"mysql_updated_at": doc["mysql_updated_at"]}}))
-
-    if ops:
-        try:
-            clients.bulk_write(ops, ordered=False)
-        except BulkWriteError as e:
-            # Violations d'unicité (ex. e-mail déjà porté par un autre client dans Mongo) : rejet, pas d'échec global
-            for err in e.details.get("writeErrors", []):
-                op_doc = err.get("op") or {}
-                is_insert = "code_client" in op_doc
-                code = op_doc.get("code_client") or (op_doc.get("q") or {}).get("code_client") or f"inconnu-{err.get('index')}"
-                rejected.append({"code_client": code, "reasons": [f"ecriture_refusee:{err.get('code')}"],
-                                 "raw": {"errmsg": err.get("errmsg")}})
-                stats["inserted" if is_insert else "updated"] -= 1
+        except (DuplicateKeyError, WriteError) as exc:
+            # Seules les erreurs de données sont rejetées. Une erreur technique
+            # doit faire échouer la tâche pour déclencher la reprise Airflow.
+            if exc.code not in (11000, 121):
+                raise
+            rejected.append({"code_client": doc["code_client"],
+                             "reasons": [f"ecriture_refusee:{exc.code}"],
+                             "raw": {"message": "Contrainte d’unicité ou de structure non respectée."}})
 
     # Journal des rejets (idempotent : un document par code_client, nettoyé quand la ligne devient valide)
     if codes:

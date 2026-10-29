@@ -1,5 +1,6 @@
 # Dépendances des tests unitaires (hors Docker). pymongo est aligné sur l'image Airflow (4.8.0)
 # car mongomock n'est pas compatible avec les pymongo >= 4.11.
-pytest>=8
-mongomock>=4.1
+pytest==9.2.0
+pytest-cov==7.1.0
+mongomock==4.3.0
 pymongo==4.8.0

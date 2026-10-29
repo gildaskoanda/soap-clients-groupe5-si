@@ -1,0 +1,57 @@
+Exécution locale : 2026-10-29 (UTC)
+Commande : .venv/bin/python -m pytest airflow/tests -v --cov=airflow/dags/clients_etl --cov-report=term-missing
+Bases MySQL et MongoDB simulées ; ce rapport ne valide pas les services réels.
+
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.2.0, pluggy-1.7.0 -- /home/aiobi5/Documents/cours/Develop-composant-web/projet/soap-clients-groupe5-si/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/aiobi5/Documents/cours/Develop-composant-web/projet/soap-clients-groupe5-si
+plugins: cov-7.1.0
+collecting ... collected 33 items
+
+airflow/tests/test_etl.py::test_validate_ok PASSED                       [  3%]
+airflow/tests/test_etl.py::test_validate_rejects[over0-email_invalide] PASSED [  6%]
+airflow/tests/test_etl.py::test_validate_rejects[over1-email_invalide] PASSED [  9%]
+airflow/tests/test_etl.py::test_validate_rejects[over2-telephone_invalide] PASSED [ 12%]
+airflow/tests/test_etl.py::test_validate_rejects[over3-nom_invalide] PASSED [ 15%]
+airflow/tests/test_etl.py::test_validate_rejects[over4-nom_manquant] PASSED [ 18%]
+airflow/tests/test_etl.py::test_validate_rejects[over5-prenom_manquant] PASSED [ 21%]
+airflow/tests/test_etl.py::test_validate_rejects[over6-code_client_invalide] PASSED [ 24%]
+airflow/tests/test_etl.py::test_validate_rejects[over7-statut_invalide] PASSED [ 27%]
+airflow/tests/test_etl.py::test_transform_normalizes PASSED              [ 30%]
+airflow/tests/test_etl.py::test_first_load_inserts_and_logs_rejects PASSED [ 33%]
+airflow/tests/test_etl.py::test_idempotent_rerun_changes_nothing PASSED  [ 36%]
+airflow/tests/test_etl.py::test_source_change_updates_and_bumps_version PASSED [ 39%]
+airflow/tests/test_etl.py::test_mongo_modified_client_is_not_overwritten PASSED [ 42%]
+airflow/tests/test_etl.py::test_rejected_row_cleared_once_fixed PASSED   [ 45%]
+airflow/tests/test_etl.py::test_duplicate_email_in_batch_rejected PASSED [ 48%]
+airflow/tests/test_etl.py::test_old_extract_cannot_undo_reconciled_soap_change[False] PASSED [ 51%]
+airflow/tests/test_etl.py::test_old_extract_cannot_undo_reconciled_soap_change[True] PASSED [ 54%]
+airflow/tests/test_etl.py::test_old_source_timestamp_is_not_reimported PASSED [ 57%]
+airflow/tests/test_etl.py::test_concurrent_soap_write_is_preserved_and_counted PASSED [ 60%]
+airflow/tests/test_etl.py::test_reconcile_applies_pending_change PASSED  [ 63%]
+airflow/tests/test_etl.py::test_reconcile_is_idempotent PASSED           [ 66%]
+airflow/tests/test_etl.py::test_conflict_mongo_wins_and_keeps_audit PASSED [ 69%]
+airflow/tests/test_etl.py::test_row_missing_in_mysql_flags_conflict PASSED [ 72%]
+airflow/tests/test_etl.py::test_failure_on_one_client_does_not_block_others PASSED [ 75%]
+airflow/tests/test_etl.py::test_existing_email_collision_is_rejected_with_correct_code PASSED [ 78%]
+airflow/tests/test_etl.py::test_metadata_refresh_preserves_business_version PASSED [ 81%]
+airflow/tests/test_etl.py::test_technical_write_failure_is_not_reported_as_success PASSED [ 84%]
+airflow/tests/test_etl.py::test_extract_converts_dates_and_keeps_column_names PASSED [ 87%]
+airflow/tests/test_etl.py::test_reconciliation_preserves_new_soap_version PASSED [ 90%]
+airflow/tests/test_etl.py::test_audit_failure_keeps_change_pending PASSED [ 93%]
+airflow/tests/test_etl.py::test_mysql_gateway_locks_row_and_commits_parameterized_update PASSED [ 96%]
+airflow/tests/test_etl.py::test_blank_email_is_rejected_and_date_object_normalized PASSED [100%]
+
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.3-final-0 ________________
+
+Name                                    Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------
+airflow/dags/clients_etl/__init__.py        0      0   100%
+airflow/dags/clients_etl/etl.py            74      0   100%
+airflow/dags/clients_etl/reconcile.py      63      3    95%   22, 86-87
+airflow/dags/clients_etl/rules.py          36      0   100%
+---------------------------------------------------------------------
+TOTAL                                     173      3    98%
+============================== 33 passed in 0.28s ==============================

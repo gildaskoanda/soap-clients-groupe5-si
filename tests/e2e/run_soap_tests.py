@@ -18,6 +18,8 @@ import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
+from datetime import datetime, timezone
 
 NS = "urn:ibam:clients:v1"
 ENV = "http://schemas.xmlsoap.org/soap/envelope/"
@@ -39,7 +41,7 @@ class Soap:
     def call(self, op, fields, raw=None):
         """Envoie une requête ; retourne (statut_http, racine_xml_du_Body|None, fault_dict|None)."""
         if raw is None:
-            inner = "".join(f"<c:{k}>{v}</c:{k}>" for k, v in fields)
+            inner = "".join(f"<c:{k}>{escape(str(v))}</c:{k}>" for k, v in fields)
             raw = (f'<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="{ENV}" '
                    f'xmlns:c="{NS}"><soapenv:Body><c:{op}Request>{inner}</c:{op}Request></soapenv:Body></soapenv:Envelope>')
         req = urllib.request.Request(self.endpoint, data=raw.encode(), method="POST", headers={
@@ -202,8 +204,23 @@ def main():
     # --- enveloppe invalide ----------------------------------------------------
     def t_malformed():
         st, _, f = s.call("x", [], raw="<not-soap/>")
-        return st in (400, 500) and f is not None
-    check("T18 enveloppe SOAP invalide -> Fault", "Fault HTTP 400/500", t_malformed)
+        return st == 500 and f is not None
+    check("T18 enveloppe SOAP invalide -> Fault", "Fault HTTP 500", t_malformed)
+
+    def t_empty():
+        st, _, f = s.call("x", [], raw="")
+        return st == 500 and f is not None
+    check("T21 enveloppe vide -> Fault HTTP 500", "Fault HTTP 500", t_empty)
+
+    def t_page_zero():
+        st, _, f = s.call("searchClients", [("page", "0")])
+        return st, f["code"], f["champ"]
+    check("T22 page zéro refusée", (500, "VALIDATION_ERROR", "page"), t_page_zero)
+
+    def t_xml_text():
+        st, el, f = s.call("searchClients", [("ville", "Ville & exemple")])
+        return st == 200 and el.findtext(q("total")) == "0"
+    check("T23 caractères XML dans un filtre", "HTTP 200, aucun résultat", t_xml_text)
 
     # --- indisponibilité de la base -----------------------------------------
     if a.db_down != "skip":
@@ -219,11 +236,17 @@ def main():
                 urllib.request.urlopen(a.url.rstrip("/") + "/_test/up", timeout=5).read()
             else:
                 subprocess.run(["docker", "compose", "start", "mongo"], check=True, capture_output=True)
-                time.sleep(8)
+                for _ in range(60):
+                    state = subprocess.run(["docker", "compose", "exec", "-T", "mongo", "mongosh", "--quiet",
+                                            "--eval", "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"], capture_output=True)
+                    if state.returncode == 0:
+                        return
+                    time.sleep(1)
+                raise RuntimeError("MongoDB n’est pas revenu après 60 secondes")
 
         def t_db_down():
-            down()
             try:
+                down()
                 st, _, f = s.call("getClientDetails", [("codeClient", CODE)])
                 return (st, f["faultcode"], f["code"])
             finally:
@@ -246,6 +269,7 @@ def main():
     if a.report:
         with open(a.report, "w", encoding="utf-8") as fh:
             fh.write(f"# Résultats des tests SOAP\n\nCible : `{a.url}` — mode indisponibilité base : `{a.db_down}`\n\n")
+            fh.write(f"Exécution UTC : {datetime.now(timezone.utc).isoformat()}\n\n")
             fh.write("| # | Test | Résultat attendu | Statut |\n|---|---|---|---|\n")
             for i, (name, exp, got, ok) in enumerate(results, 1):
                 fh.write(f"| {i} | {name} | {str(exp).replace('|', '/')} | {'✅ PASS' if ok else '❌ FAIL — ' + str(got).replace('|', '/')} |\n")

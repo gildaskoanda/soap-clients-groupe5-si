@@ -1,0 +1,3 @@
+# Ces modules restent importables, mais ne définissent pas de DAG.
+(^|/)clients_etl(/|$)
+(^|/)__pycache__(/|$)

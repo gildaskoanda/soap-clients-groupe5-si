@@ -24,6 +24,59 @@ zabbix_export:
           value: '50'
           description: 'Nombre de clients en attente de reconciliation vers MySQL'
       items:
+        - uuid: f7521220b80d4e56b0fac9fda781ca51
+          name: 'Consultation SOAP de contrôle réussie'
+          type: HTTP_AGENT
+          key: soap.check.ok
+          delay: 1m
+          history: 14d
+          trends: 90d
+          url: '{$SOAP_BASE_URL}/soap/clients'
+          request_method: POST
+          post_type: XML
+          posts: |
+            <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:c="urn:ibam:clients:v1">
+              <soap:Body><c:getClientDetailsRequest><c:codeClient>CLI-000010</c:codeClient></c:getClientDetailsRequest></soap:Body>
+            </soap:Envelope>
+          headers:
+            - name: Content-Type
+              value: 'text/xml; charset=utf-8'
+            - name: SOAPAction
+              value: 'urn:ibam:clients:v1#getClientDetails'
+          status_codes: '200,500'
+          timeout: 10s
+          preprocessing:
+            - type: XMLPATH
+              parameters:
+                - 'count(//*[local-name()="getClientDetailsResponse"]/*[local-name()="client"]/*[local-name()="codeClient" and text()="CLI-000010"])'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          triggers:
+            - uuid: b4ab294e4e9c45339e9b3afde49518b7
+              expression: '(count(/SOAP Clients Service/soap.check.ok,#3)=3 and max(/SOAP Clients Service/soap.check.ok,#3)=0) or nodata(/SOAP Clients Service/soap.check.ok,3m)=1'
+              name: 'La consultation SOAP de contrôle échoue'
+              priority: HIGH
+              description: 'Charger les données par Airflow ; vérifier ensuite le WSDL, le service et MongoDB.'
+        - uuid: 47a56628178349e7bc29c6e600a996a4
+          name: 'Nombre d’opérations publiées dans le WSDL'
+          type: HTTP_AGENT
+          key: soap.wsdl.operations
+          delay: 1m
+          history: 14d
+          trends: 90d
+          url: '{$SOAP_BASE_URL}/soap/clients?wsdl'
+          timeout: 5s
+          preprocessing:
+            - type: XMLPATH
+              parameters:
+                - 'count(/*[local-name()="definitions"]/*[local-name()="portType"]/*[local-name()="operation"])'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          triggers:
+            - uuid: 7c7d2be13ef94dd3b092721b52016e34
+              expression: 'last(/SOAP Clients Service/soap.wsdl.operations)<>3 or nodata(/SOAP Clients Service/soap.wsdl.operations,3m)=1'
+              name: 'Contrat WSDL indisponible ou incomplet'
+              priority: AVERAGE
         - uuid: 23ccae5158bf476c86577685ae7f936e
           name: 'Santé du service (brut)'
           type: HTTP_AGENT
@@ -148,6 +201,7 @@ zabbix_export:
           name: 'Latence moyenne SOAP'
           type: DEPENDENT
           key: soap.latency.avg
+          value_type: FLOAT
           delay: '0'
           history: 14d
           trends: 90d
@@ -232,6 +286,7 @@ zabbix_export:
           name: 'Âge de la dernière exécution ETL'
           type: DEPENDENT
           key: soap.etl.age
+          value_type: FLOAT
           delay: '0'
           history: 14d
           trends: 90d
@@ -243,6 +298,9 @@ zabbix_export:
                 - $.etl_last_age_seconds
               error_handler: CUSTOM_VALUE
               error_handler_params: '-1'
+            - type: JAVASCRIPT
+              parameters:
+                - "return value === 'null' ? -1 : Number(value);"
           master_item:
             key: soap.stats.raw
           tags:

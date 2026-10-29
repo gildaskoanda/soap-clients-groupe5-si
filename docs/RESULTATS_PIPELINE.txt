@@ -1,0 +1,35 @@
+Exécution locale réelle : 2026-10-29 (UTC)
+Commande : bash tests/e2e/run_pipeline_e2e.sh
+Données fictives : MySQL / MongoDB, DAG Airflow et service Laravel SOAP réels.
+
+== Test de bout en bout : client CLI-000020, nouvelle ville 'Ville-e2e1793232661'
+
+PASS  E0 service SOAP et MongoDB disponibles (/health)
+PASS  E0 airflow-scheduler démarré
+PASS  E0 DAG enregistrés dans Airflow
+PASS  E1 MySQL contient 208 lignes fictives
+PASS  E1 DAG 1 exécuté avec succès (3 tâches)
+PASS  E1 MongoDB contient 201 clients valides
+PASS  E1 MongoDB conserve 7 rejets de qualité
+PASS  E2 relance du DAG 1 : succès
+PASS  E2 relance : 0 insertion (idempotence)
+PASS  E2 relance : toujours 201 clients (pas de doublon)
+PASS  E3 getClientDetails renvoie le client
+PASS  E4 updateClient : nouvelle ville renvoyée
+PASS  E4 updateClient : synchronisation = pending_mysql
+PASS  E4 updateClient : version incrémentée
+PASS  E5 MongoDB : sync_status = pending_mysql
+PASS  E5 MySQL inchangé (référence = MongoDB, pas de retour automatique)
+PASS  E6 DAG 1 relancé : succès
+PASS  E6 modification SOAP conservée dans MongoDB
+PASS  E6 conflit détecté et ignoré par le DAG 1 (1)
+PASS  E7 DAG 2 (réconciliation) exécuté avec succès
+PASS  E7 MySQL a reçu la modification
+PASS  E7 MongoDB : sync_status = synced
+PASS  E7 journal de réconciliation : action 'applied' (1)
+PASS  E8 getClientDetails : synchronisation = synced
+PASS  E9 import après réconciliation : succès
+PASS  E9 valeur SOAP conservée
+PASS  E9 version métier inchangée
+
+== Bilan : 27 réussis, 0 échecs
