@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Démonstration locale : modifier uniquement la ville du client CLI-000010.
+  Avant envoi :
+  1. Mettre le DAG de réconciliation en pause et attendre la fin des runs actifs.
+  2. Lire le client avec 01_getClientDetails_ok.xml.
+  3. Remplacer versionAttendue=3 par la version réellement retournée.
+  4. Choisir une ville différente de la valeur actuelle et relever la valeur MySQL.
+  Résultat attendu : nouvelle ville, version augmentée de 1, pending_mysql.
+  Une seconde soumission avec la même ancienne version doit produire VERSION_CONFLICT.
+  Après la comparaison avec MySQL, déclencher la réconciliation et vérifier synced.
+  Restaurer ensuite l'état initial de la planification du DAG.
+  Attention : cet appel modifie les données ; ne pas l'envoyer sans préparation.
+-->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:c="urn:ibam:clients:v1">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <c:updateClientRequest>
+      <c:codeClient>CLI-000010</c:codeClient>
+      <c:versionAttendue>3</c:versionAttendue>
+      <c:ville>Kaya</c:ville>
+    </c:updateClientRequest>
+  </soapenv:Body>
+</soapenv:Envelope>
